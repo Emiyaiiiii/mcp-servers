@@ -1,0 +1,39 @@
+# 忽略 Python 编译产物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略虚拟环境
+.venv/
+env/
+venv/
+
+# 忽略环境变量文件
+.env
+
+# 忽略日志文件
+logs/
+*.log
+
+# 忽略 Docker 相关文件
+.dockerignore
+
+# 忽略 IDE 相关文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 忽略测试覆盖报告
+coverage/
+.coverage
+
+# 忽略构建产物
+build/
+dist/
+*.egg-info/
+
+# 忽略 OS 相关文件
+.DS_Store
+Thumbs.db

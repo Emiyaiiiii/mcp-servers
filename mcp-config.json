@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "flood-control": {
+      "transport": "stdio",
+      "command": "uv",
+      "args": ["run", "mcp-server"],
+      "cwd": "/mnt/d/workspace/Flood-Control-Four-Pre-System/mcp-servers"
+    }
+  }
+}

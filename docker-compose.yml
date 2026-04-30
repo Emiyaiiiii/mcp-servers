@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build: .
+    command: uv run python -c "from src.server import run_server; run_server(transport='streamable-http')"
+    restart: always
+    ports:
+      - "8082:8082"
+    volumes:
+      - .:/app
+    environment:
+      - SCENE_WS_BASE_URL=ws://ue-server:8889
+      - DATA_API_MOCK_ENABLED=true
+      - LOG_LEVEL=INFO
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge

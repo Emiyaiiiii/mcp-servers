@@ -1,0 +1,72 @@
+# 防洪四预 MCP 服务配置
+
+# 水库配置
+reservoirs:
+  - id: "WanJiaZhai"
+    name: "万家寨"
+    camera_position: [111.429921, 39.575537, 1039]
+    camera_rotation: [-20, -100, 0]
+  - id: "LongKou"
+    name: "龙口"
+    camera_position: [111.293446, 39.419774, 939]
+    camera_rotation: [-70, -12, 0]
+  - id: "GuXian"
+    name: "古贤"
+    camera_position: [110.44633, 36.2147, 621]
+    camera_rotation: [-40, -75, 0]
+  - id: "SanMenXia"
+    name: "三门峡"
+    camera_position: [111.34709, 34.826, 375.696]
+    camera_rotation: [-15.987911, -101.814504, 0]
+    water_level_view_position: [111.341, 34.833, 407.460]
+    water_level_view_rotation: [-19.998370, 53.410887, 0]
+    gates:
+      上孔:
+        - "smx_sk_1"
+        - "smx_sk_2"
+        - "smx_sk_3"
+        - "smx_sk_4"
+        - "smx_sk_5"
+        - "smx_sk_6"
+        - "smx_sk_7"
+        - "smx_sk_8"
+        - "smx_sk_9"
+        - "smx_sk_10"
+        - "smx_sk_11"
+        - "smx_sk_12"
+      底孔:
+        - "smx_dk_1"
+        - "smx_dk_2"
+        - "smx_dk_3"
+        - "smx_dk_4"
+        - "smx_dk_5"
+        - "smx_dk_6"
+        - "smx_dk_7"
+        - "smx_dk_8"
+        - "smx_dk_9"
+        - "smx_dk_10"
+        - "smx_dk_11"
+        - "smx_dk_12"
+      导流洞:
+        - "smx_dld_1"
+        - "smx_dld_2"
+  - id: "XiaoLangDi"
+    name: "小浪底"
+    camera_position: [112.379, 34.922, 670]
+    camera_rotation: [-20, -162, 0]
+  - id: "HeKouCun"
+    name: "河口村"
+    camera_position: [112.644, 35.195, 420]
+    camera_rotation: [-20, -12, 0]
+  - id: "HuaYuanKou"
+    name: "花园口"
+    camera_position: [113.674932, 34.903277, 300]
+    camera_rotation: [-60, -80, 0]
+  - id: "LuHun"
+    name: "陆浑"
+    camera_position: [112.184, 34.205, 388.267]
+    camera_rotation: [-10, 130.829, 0]
+  - id: "GuXianCounty"
+    name: "故县"
+    camera_position: [111.275, 34.246, 800]
+    camera_rotation: [-20, 70, 0]
