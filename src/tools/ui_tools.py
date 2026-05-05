@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 async def send_ui_command_async(function: str, data: Dict[str, Any], target: str = "page", session_id: str = None) -> Dict[str, Any]:
     """发送UI指令
-    
+
     Args:
         function: 指令函数名
         data: 指令数据
@@ -54,155 +54,201 @@ def _get_station_name_by_code(code: str) -> str | None:
 def register_ui_tools(mcp: FastMCP):
 
     @mcp.tool
-    async def navigate_to_reservoir_page(
-        reservoir_name: str | None = None,
-        start_time: str | None = None,
-        end_time: str | None = None,
-        session_id: str | None = None
-    ) -> dict:
-        """控制前端跳转到水库实时数据页面
-        
+    async def navigate_to_reservoir_overview(session_id: str = None) -> dict:
+        """控制前端跳转到水库总览页面
+
         Args:
-            reservoir_name: 水库名称（必须是中文），例如: "小浪底"、"三门峡"、"陆浑"、"故县"、"河口村" 
-                            不指定则跳转到水库总览页面
-            start_time: 开始时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
-            end_time: 结束时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
-        logger.info(f"调用 navigate_to_reservoir_page，收到参数: reservoir_name={repr(reservoir_name)}, start_time={repr(start_time)}, end_time={repr(end_time)}, session_id={repr(session_id)}")
-        data = {}
-        reservoir_name_cn = None
+        logger.info(f"调用 navigate_to_reservoir_overview，收到参数: session_id={repr(session_id)}")
 
-        if reservoir_name:
-            code = get_reservoir_code(reservoir_name)
-            if not code:
-                reservoirs = search_reservoir(reservoir_name)
-                if reservoirs:
-                    return_value = {"success": False, "error": f"未找到水库: {reservoir_name}，类似名称: {[r['name'] for r in reservoirs[:3]]}"}
-                    logger.info(f"navigate_to_reservoir_page 返回结果: {return_value}")
-                    return return_value
-                return_value = {"success": False, "error": f"未找到水库: {reservoir_name}"}
-                logger.info(f"navigate_to_reservoir_page 返回结果: {return_value}")
-                return return_value
-
-            # 获取标准名称
-            reservoir_name_cn = _get_reservoir_name_by_code(code)
-            data["reservoir"] = code
-            data["reservoir_name"] = reservoir_name_cn or reservoir_name
-            command = "FUNC_UI_OPEN_RESERVOIR_DETAIL"
-        else:
-            command = "FUNC_UI_OPEN_RESERVOIR_OVERVIEW"
-
-        if start_time:
-            data["start_time"] = start_time
-        if end_time:
-            data["end_time"] = end_time
-
-        result = await send_ui_command_async(command, data, session_id=session_id)
+        result = await send_ui_command_async("FUNC_UI_OPEN_RESERVOIR_OVERVIEW", {}, session_id=session_id)
         return_value = {
             "success": True,
-            "reservoir_code": data.get("reservoir"),
-            "reservoir_name": reservoir_name_cn,
-            "is_overview": not bool(reservoir_name),
-            "start_time": start_time,
-            "end_time": end_time,
-            "command": command,
+            "is_overview": True,
+            "command": "FUNC_UI_OPEN_RESERVOIR_OVERVIEW",
             "response": result
         }
-        logger.info(f"navigate_to_reservoir_page 返回结果: {return_value}")
+        logger.info(f"navigate_to_reservoir_overview 返回结果: {return_value}")
         return return_value
 
     @mcp.tool
-    async def navigate_to_station_page(
-        station_name: str = None,
-        start_time: str = None,
-        end_time: str = None,
+    async def navigate_to_reservoir_detail(
+        reservoir_name: str,
+        start_time: str,
+        end_time: str,
         session_id: str = None
     ) -> dict:
-        """控制前端跳转到水文站实时数据页面
-        
+        """控制前端跳转到指定水库的实时数据详情页面
+
+        Args:
+            reservoir_name: 水库名称（必须是中文），例如: "小浪底"、"三门峡"、"陆浑"、"故县"、"河口村"
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送跳转指令的确认信息
+        """
+        logger.info(f"调用 navigate_to_reservoir_detail，收到参数: reservoir_name={repr(reservoir_name)}, start_time={repr(start_time)}, end_time={repr(end_time)}, session_id={repr(session_id)}")
+
+        code = get_reservoir_code(reservoir_name)
+        if not code:
+            reservoirs = search_reservoir(reservoir_name)
+            if reservoirs:
+                return_value = {"success": False, "error": f"未找到水库: {reservoir_name}，类似名称: {[r['name'] for r in reservoirs[:3]]}"}
+                logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
+                return return_value
+            return_value = {"success": False, "error": f"未找到水库: {reservoir_name}"}
+            logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
+            return return_value
+
+        reservoir_name_cn = _get_reservoir_name_by_code(code)
+        data = {
+            "reservoir": code,
+            "reservoir_name": reservoir_name_cn or reservoir_name,
+            "start_time": start_time,
+            "end_time": end_time
+        }
+
+        result = await send_ui_command_async("FUNC_UI_OPEN_RESERVOIR_DETAIL", data, session_id=session_id)
+        return_value = {
+            "success": True,
+            "reservoir_code": code,
+            "reservoir_name": reservoir_name_cn,
+            "is_overview": False,
+            "start_time": start_time,
+            "end_time": end_time,
+            "command": "FUNC_UI_OPEN_RESERVOIR_DETAIL",
+            "response": result
+        }
+        logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool
+    async def navigate_to_station_overview(session_id: str = None) -> dict:
+        """控制前端跳转到水文站总览页面
+
+        Args:
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送跳转指令的确认信息
+        """
+        logger.info(f"调用 navigate_to_station_overview，收到参数: session_id={repr(session_id)}")
+
+        result = await send_ui_command_async("FUNC_UI_OPEN_STATION_OVERVIEW", {}, session_id=session_id)
+        return_value = {
+            "success": True,
+            "is_overview": True,
+            "command": "FUNC_UI_OPEN_STATION_OVERVIEW",
+            "response": result
+        }
+        logger.info(f"navigate_to_station_overview 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool
+    async def navigate_to_station_detail(
+        station_name: str,
+        start_time: str,
+        end_time: str,
+        session_id: str = None
+    ) -> dict:
+        """控制前端跳转到指定水文站的实时数据详情页面
+
         Args:
             station_name: 水文站名称（必须是中文），例如: "花园口"、"高村"、"孙口"、"艾山"、"泺口"、"利津"
-                            不指定则跳转到水文站总览页面
-            start_time: 开始时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
-            end_time: 结束时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
-        logger.info(f"调用 navigate_to_station_page，收到参数: station_name={repr(station_name)}, start_time={repr(start_time)}, end_time={repr(end_time)}, session_id={repr(session_id)}")
-        data = {}
-        station_name_cn = None
+        logger.info(f"调用 navigate_to_station_detail，收到参数: station_name={repr(station_name)}, start_time={repr(start_time)}, end_time={repr(end_time)}, session_id={repr(session_id)}")
 
-        if station_name:
-            code = get_station_code(station_name)
-            if not code:
-                stations = search_station(station_name)
-                if stations:
-                    return_value = {"success": False, "error": f"未找到水文站: {station_name}，类似名称: {[s['name'] for s in stations[:3]]}"}
-                    logger.info(f"navigate_to_station_page 返回结果: {return_value}")
-                    return return_value
-                return_value = {"success": False, "error": f"未找到水文站: {station_name}"}
-                logger.info(f"navigate_to_station_page 返回结果: {return_value}")
+        code = get_station_code(station_name)
+        if not code:
+            stations = search_station(station_name)
+            if stations:
+                return_value = {"success": False, "error": f"未找到水文站: {station_name}，类似名称: {[s['name'] for s in stations[:3]]}"}
+                logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
                 return return_value
+            return_value = {"success": False, "error": f"未找到水文站: {station_name}"}
+            logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
+            return return_value
 
-            # 获取标准名称
-            station_name_cn = _get_station_name_by_code(code)
-            data["station"] = code
-            data["station_name"] = station_name_cn or station_name
-            command = "FUNC_UI_OPEN_STATION_DETAIL"
-        else:
-            command = "FUNC_UI_OPEN_STATION_OVERVIEW"
+        station_name_cn = _get_station_name_by_code(code)
+        data = {
+            "station": code,
+            "station_name": station_name_cn or station_name,
+            "start_time": start_time,
+            "end_time": end_time
+        }
 
-        if start_time:
-            data["start_time"] = start_time
-        if end_time:
-            data["end_time"] = end_time
-
-        result = await send_ui_command_async(command, data, session_id=session_id)
+        result = await send_ui_command_async("FUNC_UI_OPEN_STATION_DETAIL", data, session_id=session_id)
         return_value = {
             "success": True,
-            "station_code": data.get("station"),
+            "station_code": code,
             "station_name": station_name_cn,
-            "is_overview": not bool(station_name),
+            "is_overview": False,
             "start_time": start_time,
             "end_time": end_time,
-            "command": command,
+            "command": "FUNC_UI_OPEN_STATION_DETAIL",
             "response": result
         }
-        logger.info(f"navigate_to_station_page 返回结果: {return_value}")
+        logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
         return return_value
 
     @mcp.tool
-    async def navigate_to_rainfall_page(
-        basin: str = None,
-        start_time: str = None,
-        end_time: str = None,
-        session_id: str = None
-    ) -> dict:
-        """控制前端跳转到降雨信息页面
-        
+    async def navigate_to_rainfall_overview(session_id: str = None) -> dict:
+        """控制前端跳转到降雨信息总览页面
+
         Args:
-            basin: 流域名称 (可选)。例如: 黄河, 洛河, 伊洛河
-            start_time: 开始时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
-            end_time: 结束时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
-        logger.info(f"调用 navigate_to_rainfall_page，收到参数: basin={repr(basin)}, start_time={repr(start_time)}, end_time={repr(end_time)}, session_id={repr(session_id)}")
-        data = {}
-        if basin:
-            data["basin"] = basin
-        if start_time:
-            data["start_time"] = start_time
-        if end_time:
-            data["end_time"] = end_time
+        logger.info(f"调用 navigate_to_rainfall_overview，收到参数: session_id={repr(session_id)}")
+
+        result = await send_ui_command_async("FUNC_UI_NAVIGATE_RAINFALL", {}, session_id=session_id)
+        return_value = {
+            "success": True,
+            "command": "FUNC_UI_NAVIGATE_RAINFALL",
+            "response": result
+        }
+        logger.info(f"navigate_to_rainfall_overview 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool
+    async def navigate_to_rainfall_basin(
+        basin: str,
+        start_time: str,
+        end_time: str,
+        session_id: str = None
+    ) -> dict:
+        """控制前端跳转到指定流域的降雨信息页面
+
+        Args:
+            basin: 流域名称，例如: "黄河"、"洛河"、"伊洛河"
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送跳转指令的确认信息
+        """
+        logger.info(f"调用 navigate_to_rainfall_basin，收到参数: basin={repr(basin)}, start_time={repr(start_time)}, end_time={repr(end_time)}, session_id={repr(session_id)}")
+
+        data = {
+            "basin": basin,
+            "start_time": start_time,
+            "end_time": end_time
+        }
 
         result = await send_ui_command_async("FUNC_UI_NAVIGATE_RAINFALL", data, session_id=session_id)
         return_value = {
@@ -213,7 +259,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_NAVIGATE_RAINFALL",
             "response": result
         }
-        logger.info(f"navigate_to_rainfall_page 返回结果: {return_value}")
+        logger.info(f"navigate_to_rainfall_basin 返回结果: {return_value}")
         return return_value
 
     @mcp.tool
@@ -223,12 +269,12 @@ def register_ui_tools(mcp: FastMCP):
         session_id: str = None
     ) -> dict:
         """控制前端跳转到相似雨分析页面
-        
+
         Args:
-            start_time: 开始时间。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
-            end_time: 结束时间。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
+            start_time: 开始时间（必传）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
@@ -252,18 +298,18 @@ def register_ui_tools(mcp: FastMCP):
     @mcp.tool
     async def navigate_to_reservoir_forecast_page(
         reservoir_name: str,
-        start_time: str = None,
-        end_time: str = None,
+        start_time: str,
+        end_time: str,
         session_id: str = None
     ) -> dict:
-        """控制前端跳转到水库降雨预报页面
-        
+        """控制前端跳转到水库预报页面
+
         Args:
             reservoir_name: 水库名称（必须是中文），例如: "小浪底"、"三门峡"、"陆浑"、"故县"、"河口村"
-            start_time: 开始时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
-            end_time: 结束时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
@@ -279,17 +325,14 @@ def register_ui_tools(mcp: FastMCP):
             logger.info(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
             return return_value
 
-        # 获取标准名称
         reservoir_name_cn = _get_reservoir_name_by_code(code)
 
         data = {
             "reservoir": code,
-            "reservoir_name": reservoir_name_cn or reservoir_name
+            "reservoir_name": reservoir_name_cn or reservoir_name,
+            "start_time": start_time,
+            "end_time": end_time
         }
-        if start_time:
-            data["start_time"] = start_time
-        if end_time:
-            data["end_time"] = end_time
 
         result = await send_ui_command_async("FUNC_UI_NAVIGATE_RESERVOIR_FORECAST", data, session_id=session_id)
         return_value = {
@@ -305,49 +348,70 @@ def register_ui_tools(mcp: FastMCP):
         return return_value
 
     @mcp.tool
-    async def navigate_to_control_guidance_page(
-        section_name: str = None,
-        session_id: str = None
-    ) -> dict:
-        """控制前端跳转到控导信息页面
-        
+    async def navigate_to_control_guidance_overview(session_id: str = None) -> dict:
+        """控制前端跳转到控导信息总览页面
+
         Args:
-            section_name: 河段/断面名称 (可选)。不指定则跳转到控导总览页面
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
-        logger.info(f"调用 navigate_to_control_guidance_page，收到参数: section_name={repr(section_name)}, session_id={repr(session_id)}")
-        data = {
-            "section": section_name
-        }
+        logger.info(f"调用 navigate_to_control_guidance_overview，收到参数: session_id={repr(session_id)}")
 
+        result = await send_ui_command_async("FUNC_UI_OPEN_CONTROL_GUIDANCE", {}, session_id=session_id)
+        return_value = {
+            "success": True,
+            "is_overview": True,
+            "command": "FUNC_UI_OPEN_CONTROL_GUIDANCE",
+            "response": result
+        }
+        logger.info(f"navigate_to_control_guidance_overview 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool
+    async def navigate_to_control_guidance_section(
+        section_name: str,
+        session_id: str = None
+    ) -> dict:
+        """控制前端跳转到指定河段/断面的控导信息页面
+
+        Args:
+            section_name: 河段/断面名称
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送跳转指令的确认信息
+        """
+        logger.info(f"调用 navigate_to_control_guidance_section，收到参数: section_name={repr(section_name)}, session_id={repr(session_id)}")
+
+        data = {"section": section_name}
         result = await send_ui_command_async("FUNC_UI_OPEN_CONTROL_GUIDANCE", data, session_id=session_id)
         return_value = {
             "success": True,
             "section": section_name,
+            "is_overview": False,
             "command": "FUNC_UI_OPEN_CONTROL_GUIDANCE",
             "response": result
         }
-        logger.info(f"navigate_to_control_guidance_page 返回结果: {return_value}")
+        logger.info(f"navigate_to_control_guidance_section 返回结果: {return_value}")
         return return_value
 
     @mcp.tool
     async def navigate_to_station_forecast_page(
         station_name: str,
-        start_time: str = None,
-        end_time: str = None,
+        start_time: str,
+        end_time: str,
         session_id: str = None
     ) -> dict:
-        """控制前端跳转到水文站降雨预报页面
-        
+        """控制前端跳转到水文站预报页面
+
         Args:
             station_name: 水文站名称（必须是中文），例如: "花园口"、"高村"、"孙口"、"艾山"、"泺口"、"利津"
-            start_time: 开始时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
-            end_time: 结束时间 (可选)。格式: YYYY-MM-DD 或 YYYY-MM-DD HH:mm
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
-        
+
         Returns:
             发送跳转指令的确认信息
         """
@@ -363,17 +427,14 @@ def register_ui_tools(mcp: FastMCP):
             logger.info(f"navigate_to_station_forecast_page 返回结果: {return_value}")
             return return_value
 
-        # 获取标准名称
         station_name_cn = _get_station_name_by_code(code)
 
         data = {
             "station": code,
-            "station_name": station_name_cn or station_name
+            "station_name": station_name_cn or station_name,
+            "start_time": start_time,
+            "end_time": end_time
         }
-        if start_time:
-            data["start_time"] = start_time
-        if end_time:
-            data["end_time"] = end_time
 
         result = await send_ui_command_async("FUNC_UI_NAVIGATE_STATION_FORECAST", data, session_id=session_id)
         return_value = {
@@ -395,8 +456,7 @@ def register_ui_tools(mcp: FastMCP):
         target_water_level: str = None,
         session_id: str = None
     ) -> dict:
-        """
-        生成五库联调调度方案单（模拟接口，后续会提供真实接口）。
+        """生成五库联调调度方案单（模拟接口，后续会提供真实接口）。
 
         Args:
             constraints: 用户约束条件描述，如"控制花园口流量不超过4500m³/s，调整小浪底水位不超248m"
@@ -477,8 +537,7 @@ def register_ui_tools(mcp: FastMCP):
         dispatch_scheme: str,
         session_id: str = None
     ) -> dict:
-        """
-        向前端发送预演指令，前端收到后执行具体的预演任务。
+        """向前端发送预演指令，前端收到后执行具体的预演任务。
         发送后会一直等待前端返回预演结果（超时时间1小时）。
 
         Args:
