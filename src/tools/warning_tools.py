@@ -1,4 +1,4 @@
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -6,7 +6,7 @@ logger = get_logger(__name__)
 
 def register_warning_tools(mcp: FastMCP):
 
-    @mcp.tool
+    @mcp.tool()
     async def check_water_level_warning(
         reservoir: str,
         forecast_water_level: float,
@@ -55,7 +55,7 @@ def register_warning_tools(mcp: FastMCP):
         logger.info(f"check_water_level_warning 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def check_flow_warning(
         section: str,
         forecast_flow: float,
@@ -97,7 +97,7 @@ def register_warning_tools(mcp: FastMCP):
         logger.info(f"check_flow_warning 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def generate_warning_bulletin(
         reservoir: str,
         current_water_level: float,

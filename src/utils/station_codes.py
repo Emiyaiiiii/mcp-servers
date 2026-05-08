@@ -15,6 +15,7 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 _reservoir_cache: Dict[str, str] = {}
 _reservoir_name_to_code: Dict[str, str] = {}
+_reservoir_code_to_station_code: Dict[str, str] = {}  # 水库编码到stationCode的映射
 _reservoir_aliases: Dict[str, str] = {}  # 别名映射
 _station_cache: Dict[str, str] = {}
 _station_name_to_code: Dict[str, str] = {}
@@ -111,7 +112,7 @@ def _calculate_similarity(str1: str, str2: str) -> float:
 
 
 def _load_reservoir_codes():
-    global _reservoir_cache, _reservoir_name_to_code, _reservoir_aliases, _initialized
+    global _reservoir_cache, _reservoir_name_to_code, _reservoir_code_to_station_code, _reservoir_aliases, _initialized
     if _initialized:
         return
 
@@ -124,10 +125,15 @@ def _load_reservoir_codes():
                     name = row.get("rsnm", "").strip()
                     code = row.get("rscd", "").strip()
                     station_name = row.get("stnm", "").strip()  # 测站名称
+                    station_code = row.get("stationCode", "").strip()  # stationCode
 
                     if name and code:
                         _reservoir_cache[code] = name
                         _reservoir_name_to_code[name] = code
+                        
+                        # 存储stationCode
+                        if station_code and station_code != "null":
+                            _reservoir_code_to_station_code[code] = station_code
 
                         # 添加标准化名称映射
                         normalized_name = _normalize_text(name)
@@ -338,6 +344,19 @@ def search_station(keyword: str, limit: int = 20, similarity_threshold: float = 
     results.sort(key=lambda x: x["similarity"], reverse=True)
 
     return [{"code": r["code"], "name": r["name"]} for r in results[:limit]]
+
+
+def get_reservoir_station_code(reservoir_code: str) -> Optional[str]:
+    """根据水库编码获取stationCode
+    
+    Args:
+        reservoir_code: 水库编码
+        
+    Returns:
+        stationCode，未找到返回 None
+    """
+    _load_reservoir_codes()
+    return _reservoir_code_to_station_code.get(reservoir_code)
 
 
 def get_all_reservoirs() -> List[Dict[str, str]]:

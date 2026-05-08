@@ -1,4 +1,4 @@
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 import os
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
@@ -11,7 +11,7 @@ TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 def register_plan_tools(mcp: FastMCP):
     """注册预案相关工具"""
 
-    @mcp.tool
+    @mcp.tool()
     async def list_plan_templates() -> dict:
         """
         列出所有可用的预案模板。
@@ -36,7 +36,7 @@ def register_plan_tools(mcp: FastMCP):
             logger.info(f"list_plan_templates 返回结果: {return_value}")
             return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def load_plan_template(template_name: str) -> str:
         """
         加载并渲染预案模板。
@@ -64,7 +64,7 @@ def register_plan_tools(mcp: FastMCP):
             logger.info(f"load_plan_template 返回结果: {repr(return_value)}")
             return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def query_knowledge_base(query: str) -> str:
         """
         查询防洪知识库。

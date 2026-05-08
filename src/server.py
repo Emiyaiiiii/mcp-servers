@@ -1,14 +1,17 @@
 import os
 import uvicorn
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.routing import WebSocketRoute, Route
 from starlette.responses import FileResponse, JSONResponse
+from starlette.middleware.cors import CORSMiddleware
 from src.config.settings import settings
 from src.tools.warning_tools import register_warning_tools
 from src.tools.simulation_tools import register_simulation_tools
 from src.tools.plan_tools import register_plan_tools
 from src.tools.data_api_tools import register_data_api_tools
 from src.tools.forecast_models import register_forecast_models
+from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
 from src.services.websocket_manager import websocket_handler
 
@@ -34,13 +37,25 @@ def index_handler(request):
 
 def create_app() -> FastMCP:
     """创建 FastMCP 应用实例"""
-    mcp = FastMCP(settings.MCP_SERVER_NAME)
+    # 配置传输安全设置，允许MCP Inspector连接
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,  # 禁用DNS重绑定保护以便MCP Inspector连接
+        allowed_hosts=["localhost:*", "127.0.0.1:*", "0.0.0.0:*"],
+        allowed_origins=["http://localhost:*", "http://127.0.0.1:*"],
+    )
+    
+    mcp = FastMCP(
+        settings.MCP_SERVER_NAME,
+        transport_security=transport_security,
+        stateless_http=True  # 启用无状态HTTP模式，不需要session ID
+    )
 
     register_warning_tools(mcp)
     register_simulation_tools(mcp)
     register_plan_tools(mcp)
     register_data_api_tools(mcp)
     register_forecast_models(mcp)
+    register_reservoir_dispatch(mcp)
     register_ui_tools(mcp)
 
     return mcp
@@ -51,7 +66,16 @@ def run_server(transport="streamable-http"):
     mcp_app = create_app()
     
     # 获取 FastMCP 的 Starlette 应用
-    starlette_app = mcp_app.http_app(transport=transport)
+    starlette_app = mcp_app.streamable_http_app()
+    
+    # 添加CORS中间件，允许MCP Inspector连接
+    starlette_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     
     # 添加 WebSocket 路由
     starlette_app.router.routes.append(

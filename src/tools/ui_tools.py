@@ -1,10 +1,12 @@
 from typing import Dict, Any
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 from src.services.scene_connector import scene_connector
+from src.services.scheme_storage import get_scheme, get_all_schemes
 from src.utils.station_codes import (
     get_reservoir_code, get_station_code,
     search_reservoir, search_station,
-    get_all_reservoirs, get_all_stations
+    get_all_reservoirs, get_all_stations,
+    get_reservoir_station_code
 )
 from src.utils.logger import get_logger
 
@@ -53,7 +55,7 @@ def _get_station_name_by_code(code: str) -> str | None:
 
 def register_ui_tools(mcp: FastMCP):
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_reservoir_overview(session_id: str = None) -> dict:
         """控制前端跳转到水库总览页面
 
@@ -75,7 +77,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_reservoir_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_reservoir_detail(
         reservoir_name: str,
         start_time: str,
@@ -107,8 +109,9 @@ def register_ui_tools(mcp: FastMCP):
             return return_value
 
         reservoir_name_cn = _get_reservoir_name_by_code(code)
+        station_code = get_reservoir_station_code(code)
         data = {
-            "reservoir": code,
+            "reservoir": station_code or code,
             "reservoir_name": reservoir_name_cn or reservoir_name,
             "start_time": start_time,
             "end_time": end_time
@@ -118,6 +121,7 @@ def register_ui_tools(mcp: FastMCP):
         return_value = {
             "success": True,
             "reservoir_code": code,
+            "station_code": station_code,
             "reservoir_name": reservoir_name_cn,
             "is_overview": False,
             "start_time": start_time,
@@ -128,7 +132,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_station_overview(session_id: str = None) -> dict:
         """控制前端跳转到水文站总览页面
 
@@ -150,7 +154,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_station_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_station_detail(
         station_name: str,
         start_time: str,
@@ -203,7 +207,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_rainfall_overview(session_id: str = None) -> dict:
         """控制前端跳转到降雨信息总览页面
 
@@ -224,7 +228,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_rainfall_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_rainfall_basin(
         basin: str,
         start_time: str,
@@ -262,7 +266,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_rainfall_basin 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_similar_rainfall_page(
         start_time: str,
         end_time: str,
@@ -295,7 +299,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_similar_rainfall_page 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_reservoir_forecast_page(
         reservoir_name: str,
         start_time: str,
@@ -326,9 +330,10 @@ def register_ui_tools(mcp: FastMCP):
             return return_value
 
         reservoir_name_cn = _get_reservoir_name_by_code(code)
+        station_code = get_reservoir_station_code(code)
 
         data = {
-            "reservoir": code,
+            "reservoir": station_code or code,
             "reservoir_name": reservoir_name_cn or reservoir_name,
             "start_time": start_time,
             "end_time": end_time
@@ -338,6 +343,7 @@ def register_ui_tools(mcp: FastMCP):
         return_value = {
             "success": True,
             "reservoir_code": code,
+            "station_code": station_code,
             "reservoir_name": reservoir_name_cn or reservoir_name,
             "start_time": start_time,
             "end_time": end_time,
@@ -347,7 +353,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_control_guidance_overview(session_id: str = None) -> dict:
         """控制前端跳转到控导信息总览页面
 
@@ -369,7 +375,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_control_guidance_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_control_guidance_section(
         section_name: str,
         session_id: str = None
@@ -397,7 +403,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_control_guidance_section 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def navigate_to_station_forecast_page(
         station_name: str,
         start_time: str,
@@ -449,7 +455,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"navigate_to_station_forecast_page 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool
+    @mcp.tool()
     async def generate_dispatch_scheme(
         constraints: str,
         target_flow: str = None,
@@ -532,53 +538,55 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"generate_dispatch_scheme 返回结果: {scheme}")
         return scheme
 
-    @mcp.tool
+    @mcp.tool()
     async def send_simulation_command(
-        dispatch_scheme: str,
+        scheme_id: str,
         session_id: str = None
     ) -> dict:
         """向前端发送预演指令，前端收到后执行具体的预演任务。
-        发送后会一直等待前端返回预演结果（超时时间1小时）。
 
         Args:
-            dispatch_scheme: 调度方案单（JSON格式字符串）
-            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+            scheme_id: 调度方案ID（如 DS-0001），不传则由前端选择当前方案或使用默认方案
+            session_id: 目标 session_id（自动从上下文获取，无需用户输入）
 
         Returns:
-            前端返回的预演结果
+            发送预演指令的确认信息
         """
-        logger.info(f"调用 send_simulation_command，收到参数: dispatch_scheme={repr(dispatch_scheme)}, session_id={repr(session_id)}")
+        logger.info(f"调用 send_simulation_command，收到参数: scheme_id={repr(scheme_id)}, session_id={repr(session_id)}")
         import uuid
         from datetime import datetime
 
-        try:
-            scheme_data = eval(dispatch_scheme) if isinstance(dispatch_scheme, str) else dispatch_scheme
-        except:
-            return_value = {"success": False, "error": "调度方案单格式错误"}
-            logger.info(f"send_simulation_command 返回结果: {return_value}")
-            return return_value
-
         task_id = f"sim_{uuid.uuid4().hex[:8]}"
 
-        command = {
-            "cmd": "lshh",
-            "function": "FUNC_UI_START_SIMULATION",
-            "target": "page",
-            "data": {
-                "task_id": task_id,
-                "dispatch_scheme": scheme_data,
-                "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
+        if scheme_id:
+            scheme = get_scheme(scheme_id)
+            if not scheme:
+                return_value = {
+                    "success": False,
+                    "error": f"未找到调度方案: {scheme_id}",
+                    "task_id": task_id
+                }
+                logger.info(f"send_simulation_command 返回结果: {return_value}")
+                return return_value
+        else:
+            schemes = get_all_schemes()
+            scheme = schemes[0] if schemes else None
+
+        data = {
+            "task_id": task_id,
+            "scheme_id": scheme_id,
+            "scheme": scheme,
+            "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        result = await scene_connector.send_command_and_wait_async(command, timeout=3600, target_session=session_id)
+        await send_ui_command_async("FUNC_UI_START_SIMULATION", data, target="page", session_id=session_id)
 
         return_value = {
             "success": True,
             "task_id": task_id,
-            "message": "预演执行完成",
-            "command": "FUNC_UI_START_SIMULATION",
-            "response": result
+            "scheme_id": scheme_id,
+            "message": "预演指令已发送",
+            "command": "FUNC_UI_START_SIMULATION"
         }
         logger.info(f"send_simulation_command 返回结果: {return_value}")
         return return_value

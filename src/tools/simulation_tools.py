@@ -1,5 +1,5 @@
 from typing import List
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 from src.config.config import config
 from src.services.scene_connector import scene_connector
 from src.utils.logger import get_logger
@@ -172,7 +172,7 @@ Args:
 
 Args:
     reservoir_name: 水库名称。可选值: {GATE_RESERVOIR_CHOICES}
-    gate_type: 闸门类型。可选值取决于水库
+    gate_type: 闸门类型。示例: "上孔"、"底孔"、"导流洞"（具体可选值取决于水库）
     gate_index: 闸门索引 (从1开始)。例如: 1表示第1个闸门
     is_open: 是否开启 (true=开启, false=关闭)
     session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
@@ -221,10 +221,10 @@ Returns:
     session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
 """
 
-    mcp.tool(fly_to_location)
-    mcp.tool(control_floodgate)
-    mcp.tool(set_reservoir_water_level)
-    mcp.tool(create_water_level_placemark)
-    mcp.tool(update_water_level_placemark)
-    mcp.tool(destroy_placemarks)
-    mcp.tool(get_available_locations)
+    mcp.add_tool(fly_to_location)
+    mcp.add_tool(control_floodgate)
+    mcp.add_tool(set_reservoir_water_level)
+    mcp.add_tool(create_water_level_placemark)
+    mcp.add_tool(update_water_level_placemark)
+    mcp.add_tool(destroy_placemarks)
+    mcp.add_tool(get_available_locations)

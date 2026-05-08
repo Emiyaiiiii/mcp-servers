@@ -1,8 +1,8 @@
 import requests
 from typing import Dict, Any, List
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 from src.config.settings import settings
-from src.utils.station_codes import get_reservoir_code, get_station_code
+from src.utils.station_codes import get_reservoir_code, get_station_code, get_reservoir_station_code
 from src.services.auth_service import auth_service
 from src.utils.logger import get_logger
 
@@ -38,6 +38,21 @@ def _resolve_station(name_or_code: str) -> str | None:
     if code:
         return code
     return name_or_code if name_or_code else None
+
+def _resolve_reservoir_for_api(name_or_code: str) -> str | None:
+    """解析水库名称或编码，只返回stationCode"""
+    if not name_or_code:
+        return None
+    
+    # 先获取水库编码
+    reservoir_code = get_reservoir_code(name_or_code)
+    if not reservoir_code:
+        # 如果找不到编码，直接返回原始输入
+        return name_or_code
+    
+    # 获取stationCode
+    station_code = get_reservoir_station_code(reservoir_code)
+    return station_code
 
 def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool = True) -> Dict[str, Any]:
     """发送GET请求，支持token认证和自动刷新"""
@@ -76,13 +91,13 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
 
 def register_data_api_tools(mcp: FastMCP):
 
-    @mcp.tool
+    @mcp.tool()
     async def get_rainfall_station_info(station: str) -> Dict[str, Any]:
         """
         获取雨量站基本信息。
 
         Args:
-            station: 雨量站名称或编码（支持模糊匹配，必填）
+            station: 雨量站名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -112,17 +127,17 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_rainfall_station_info 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_realtime_rainfall(
-        start_time: str | None = None,
-        end_time: str | None = None
+        start_time: str,
+        end_time: str
     ) -> Dict[str, Any]:
         """
         获取实时雨量监测数据。
 
         Args:
-            start_time: 开始时间（非必填）
-            end_time: 结束时间（非必填）
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
 
         Returns:
             {
@@ -140,29 +155,28 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_realtime_rainfall，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}")
-        url = f"{BASE_URL}/rainfall/hourrth/getRainfall"
-        params = {}
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
+        url = f"{BASE_URL}/rainfall/hourrt/getRainfall"
+        params = {
+            "startTime": start_time,
+            "endTime": end_time
+        }
         result = _get(url, params)
         logger.info(f"get_realtime_rainfall 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_daily_rainfall_stats(
-        station: str | None = None,
-        start_date: str | None = None,
-        end_date: str | None = None
+        station: str,
+        start_date: str,
+        end_date: str
     ) -> Dict[str, Any]:
         """
         获取时段日降雨量统计数据。
 
         Args:
-            station: 雨量站名称或编码（支持模糊匹配）
-            start_date: 开始日期（非必传）
-            end_date: 结束日期（非必传）
+            station: 雨量站名称（支持模糊匹配，必传）
+            start_date: 开始日期（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+            end_date: 结束日期（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
         Returns:
             {
@@ -180,30 +194,32 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_daily_rainfall_stats，收到参数: station={repr(station)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        station_code = _resolve_station(station) if station else None
+        station_code = _resolve_station(station)
+        if not station_code:
+            result = {"code": 400, "data": None, "msg": f"未找到雨量站: {station}"}
+            logger.info(f"get_daily_rainfall_stats 返回结果: {result}")
+            return result
         url = f"{BASE_URL}/rainfall/dayrt/getRainfall"
-        params = {}
-        if station_code:
-            params["stcd"] = station_code
-        if start_date:
-            params["startDate"] = start_date
-        if end_date:
-            params["endDate"] = end_date
+        params = {
+            "stcd": station_code,
+            "startDate": start_date,
+            "endDate": end_date
+        }
         result = _get(url, params)
         logger.info(f"get_daily_rainfall_stats 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_rainfall_statistics(
-        start_time: str | None = None,
-        end_time: str | None = None
+        start_time: str,
+        end_time: str
     ) -> Dict[str, Any]:
         """
         获取实时雨量统计结果。
 
         Args:
-            start_time: 开始时间
-            end_time: 结束时间（非必填）
+            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
 
         Returns:
             {
@@ -225,23 +241,22 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_rainfall_statistics，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}")
-        url = f"{BASE_URL}/rainfall/hourrth/staRainfall"
-        params = {}
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
+        url = f"{BASE_URL}/rainfall/hourrt/staRainfall"
+        params = {
+            "startTime": start_time,
+            "endTime": end_time
+        }
         result = _get(url, params)
         logger.info(f"get_rainfall_statistics 返回结果: {result}")
         return result
 
-    @mcp.tool
-    async def get_river_station_info(station: str | None = None) -> Dict[str, Any]:
+    @mcp.tool()
+    async def get_river_station_info(station: str) -> Dict[str, Any]:
         """
         获取河道水文站基本信息。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，非必填）
+            station: 水文站名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -266,16 +281,18 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_river_station_info，收到参数: station={repr(station)}")
-        station_code = _resolve_station(station) if station else None
+        station_code = _resolve_station(station)
+        if not station_code:
+            result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
+            logger.info(f"get_river_station_info 返回结果: {result}")
+            return result
         url = f"{BASE_URL}/hydrometric/qsta/get"
-        params = {}
-        if station_code:
-            params["hysta"] = station_code
+        params = {"hysta": station_code}
         result = _get(url, params)
         logger.info(f"get_river_station_info 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def list_hydrological_stations() -> Dict[str, Any]:
         """
         获取水文站基本信息列表。
@@ -310,13 +327,13 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"list_hydrological_stations 返回结果: {result}")
         return result
 
-    @mcp.tool
-    async def list_design_flood_results(station: str | None = None) -> Dict[str, Any]:
+    @mcp.tool()
+    async def list_design_flood_results(station: str) -> Dict[str, Any]:
         """
         获取设计洪水成果信息列表。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，非必填）
+            station: 水文站名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -344,22 +361,24 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 list_design_flood_results，收到参数: station={repr(station)}")
-        station_code = _resolve_station(station) if station else None
+        station_code = _resolve_station(station)
+        if not station_code:
+            result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
+            logger.info(f"list_design_flood_results 返回结果: {result}")
+            return result
         url = f"{BASE_URL}/hydrometric/flood/list"
-        params = {}
-        if station_code:
-            params["hysta"] = station_code
+        params = {"hysta": station_code}
         result = _get(url, params)
         logger.info(f"list_design_flood_results 返回结果: {result}")
         return result
 
-    @mcp.tool
-    async def get_hydrological_features(station: str | None = None) -> Dict[str, Any]:
+    @mcp.tool()
+    async def get_hydrological_features(station: str) -> Dict[str, Any]:
         """
         获取水文站水文特征统计信息。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，非必填）
+            station: 水文站名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -390,23 +409,25 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_hydrological_features，收到参数: station={repr(station)}")
-        station_code = _resolve_station(station) if station else None
+        station_code = _resolve_station(station)
+        if not station_code:
+            result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
+            logger.info(f"get_hydrological_features 返回结果: {result}")
+            return result
         url = f"{BASE_URL}/hydrometric/hystatis/get"
-        params = {}
-        if station_code:
-            params["hysta"] = station_code
+        params = {"hysta": station_code}
         result = _get(url, params)
         logger.info(f"get_hydrological_features 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def list_water_level_sections(season_code: str, station: str) -> Dict[str, Any]:
         """
         获取监测水位断面列表。
 
         Args:
-            season_code: 场次（必填）
-            station: 水文站名称或编码（支持模糊匹配，必填）
+            season_code: 场次（必传）
+            station: 水文站名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -439,7 +460,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"list_water_level_sections 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def list_realtime_hydrology(
         station: str,
         start_date: str,
@@ -449,9 +470,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水文站实时水情信息列表。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，必填）
-            start_date: 开始时间（必填）
-            end_date: 截止时间（必填）
+            station: 水文站名称（支持模糊匹配，必传）
+            start_date: 开始时间（必传，默认三天前）
+            end_date: 截止时间（必传，默认现在）
 
         Returns:
             {
@@ -481,7 +502,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"list_realtime_hydrology 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def list_daily_hydrology(
         station: str,
         start_date: str,
@@ -491,9 +512,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水文站日均水情信息列表。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配）
-            start_date: 开始时间
-            end_date: 截止时间
+            station: 水文站名称（支持模糊匹配，必传）
+            start_date: 开始时间（必传，默认三天前）
+            end_date: 截止时间（必传，默认现在）
         """
         logger.info(f"调用 list_daily_hydrology，收到参数: station={repr(station)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
         station_code = _resolve_station(station)
@@ -507,13 +528,13 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"list_daily_hydrology 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def list_reservoirs(reservoir_type: int) -> Dict[str, Any]:
         """
         获取水库水文站关系列表（包括伊洛河流域水库）。
 
         Args:
-            reservoir_type: 水库类型（1-黄河流域主要水库；2-伊洛河水库，必填）
+            reservoir_type: 水库类型（1-黄河流域主要水库；2-伊洛河水库，必传）
 
         Returns:
             {
@@ -541,13 +562,13 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"list_reservoirs 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_features(reservoir: str) -> Dict[str, Any]:
         """
         获取水库特性。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -600,7 +621,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_reservoir_features，收到参数: reservoir={repr(reservoir)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"get_reservoir_features 返回结果: {result}")
@@ -611,13 +632,13 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_features 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def list_reservoir_level_capacity(reservoir: str) -> Dict[str, Any]:
         """
         获取水库水位库容曲线。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -636,7 +657,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 list_reservoir_level_capacity，收到参数: reservoir={repr(reservoir)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"list_reservoir_level_capacity 返回结果: {result}")
@@ -647,13 +668,13 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"list_reservoir_level_capacity 返回结果: {result}")
         return result
 
-    @mcp.tool
-    async def list_reservoir_features(reservoir: str | None = None) -> Dict[str, Any]:
+    @mcp.tool()
+    async def list_reservoir_features(reservoir: str) -> Dict[str, Any]:
         """
         获取水库特征值信息列表。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，非必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
 
         Returns:
             {
@@ -689,16 +710,18 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 list_reservoir_features，收到参数: reservoir={repr(reservoir)}")
-        reservoir_code = _resolve_reservoir(reservoir) if reservoir else None
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
+        if not reservoir_code:
+            result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
+            logger.info(f"list_reservoir_features 返回结果: {result}")
+            return result
         url = f"{BASE_URL}/project/rprop/list"
-        params = {}
-        if reservoir_code:
-            params["ennmcd"] = reservoir_code
+        params = {"ennmcd": reservoir_code}
         result = _get(url, params)
         logger.info(f"list_reservoir_features 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_realtime(
         reservoir: str,
         start_date: str,
@@ -708,9 +731,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水库实时水情。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
-            start_date: 开始时间（必填）
-            end_date: 截止时间（必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
+            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
         Returns:
             {
@@ -730,7 +753,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_reservoir_realtime，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"get_reservoir_realtime 返回结果: {result}")
@@ -741,7 +764,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_realtime 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_realtime_with_yiluo(
         reservoir: str,
         start_date: str,
@@ -751,9 +774,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水库实时水情（包括伊洛河流域水库）。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
-            start_date: 开始时间（必填）
-            end_date: 截止时间（必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
+            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
         Returns:
             {
@@ -773,7 +796,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_reservoir_realtime_with_yiluo，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"get_reservoir_realtime_with_yiluo 返回结果: {result}")
@@ -784,7 +807,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_realtime_with_yiluo 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_daily(
         reservoir: str,
         start_date: str,
@@ -794,9 +817,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水库日均水情。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
-            start_date: 开始时间（必填）
-            end_date: 截止时间（必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
+            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
         Returns:
             {
@@ -816,7 +839,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_reservoir_daily，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"get_reservoir_daily 返回结果: {result}")
@@ -827,7 +850,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_daily 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_daily_with_yiluo(
         reservoir: str,
         start_date: str,
@@ -837,9 +860,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水库日均水情（包括伊洛河流域水库）。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
-            start_date: 开始时间（必填）
-            end_date: 截止时间（必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
+            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
         Returns:
             {
@@ -859,7 +882,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_reservoir_daily_with_yiluo，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"get_reservoir_daily_with_yiluo 返回结果: {result}")
@@ -870,7 +893,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_daily_with_yiluo 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_river_latest_realtime() -> Dict[str, Any]:
         """
         获取河道水文站最新实时水情。
@@ -896,7 +919,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_river_latest_realtime 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_latest_realtime() -> Dict[str, Any]:
         """
         获取水库最新实时水情。
@@ -924,19 +947,19 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_latest_realtime 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_hydrological_extreme(
         station: str,
-        start_date: str | None = None,
-        end_date: str | None = None
+        start_date: str,
+        end_date: str
     ) -> Dict[str, Any]:
         """
         获取水文站极值信息。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，必填）
-            start_date: 开始日期（yyyy-MM-dd HH:mm:ss，非必填）
-            end_date: 截止日期（yyyy-MM-dd HH:mm:ss，非必填）
+            station: 水文站名称（支持模糊匹配，必传）
+            start_date: 开始日期（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_date: 截止日期（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
 
         Returns:
             {
@@ -960,16 +983,16 @@ def register_data_api_tools(mcp: FastMCP):
             logger.info(f"get_hydrological_extreme 返回结果: {result}")
             return result
         url = f"{BASE_URL}/hydrometric/hourrt/getPeakValue"
-        params = {"hysta": station_code}
-        if start_date:
-            params["staDate"] = start_date
-        if end_date:
-            params["endDate"] = end_date
+        params = {
+            "hysta": station_code,
+            "staDate": start_date,
+            "endDate": end_date
+        }
         result = _get(url, params)
         logger.info(f"get_hydrological_extreme 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_hydrological_same_period(
         station: str,
         date: str
@@ -978,8 +1001,8 @@ def register_data_api_tools(mcp: FastMCP):
         获取水文站同期数据。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，必填）
-            date: 日期（yyyy-MM-dd，必填）
+            station: 水文站名称（支持模糊匹配，必传）
+            date: 日期（必传）。格式: yyyy-MM-dd，例如: "2026-05-06"
 
         Returns:
             {
@@ -1007,7 +1030,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_hydrological_same_period 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_hydrological_historical_same_period(
         station: str,
         start_day: str,
@@ -1017,9 +1040,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水文站历史同期数据。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，必填）
-            start_day: 开始日期（MM-dd，必填）
-            end_day: 结束日期（MM-dd，必填）
+            station: 水文站名称（支持模糊匹配，必传）
+            start_day: 开始日期（必传）。格式: MM-dd，例如: "04-15"
+            end_day: 结束日期（必传）。格式: MM-dd，例如: "05-06"
 
         Returns:
             {
@@ -1048,7 +1071,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_hydrological_historical_same_period 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_hydrological_yearly_extreme(
         station: str,
         start_date: str,
@@ -1058,9 +1081,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水文站各年份极值数据。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，必填）
-            start_date: 开始日期（yyyy-MM-dd HH:mm:ss，必填）
-            end_date: 结束日期（yyyy-MM-dd HH:mm:ss，必填）
+            station: 水文站名称（支持模糊匹配，必传）
+            start_date: 开始日期（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_date: 结束日期（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
 
         Returns:
             {
@@ -1089,7 +1112,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_hydrological_yearly_extreme 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_rainfall_warning() -> Dict[str, Any]:
         """
         获取雨量站预警信息。
@@ -1119,7 +1142,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_rainfall_warning 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_warning() -> Dict[str, Any]:
         """
         获取水库预警信息。
@@ -1149,7 +1172,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_warning 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_hydrological_warning() -> Dict[str, Any]:
         """
         获取水文站预警信息。
@@ -1180,7 +1203,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_hydrological_warning 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_reservoir_period_comparison(
         reservoir: str,
         before_date: str,
@@ -1190,9 +1213,9 @@ def register_data_api_tools(mcp: FastMCP):
         获取水库同期分析信息。
 
         Args:
-            reservoir: 水库名称或编码（支持模糊匹配，必填）
-            before_date: 开始日期（必填）
-            after_date: 预测日期（必填）
+            reservoir: 水库名称（支持模糊匹配，必传）
+            before_date: 开始日期（必传）
+            after_date: 预测日期（必传）
 
         Returns:
             {
@@ -1215,7 +1238,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_reservoir_period_comparison，收到参数: reservoir={repr(reservoir)}, before_date={repr(before_date)}, after_date={repr(after_date)}")
-        reservoir_code = _resolve_reservoir(reservoir)
+        reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
             logger.info(f"get_reservoir_period_comparison 返回结果: {result}")
@@ -1226,7 +1249,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_reservoir_period_comparison 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_river_period_comparison(
         station: str,
         before_date: str,
@@ -1237,7 +1260,7 @@ def register_data_api_tools(mcp: FastMCP):
         获取河道同期对比信息。
 
         Args:
-            station: 水文站名称或编码（支持模糊匹配，必填）
+            station: 水文站名称（支持模糊匹配，必传）
             before_date: 向前推N天的日期（必填）
             current_date: 当前日期（必填）
             after_date: 向后推N天的日期（必填）
@@ -1281,7 +1304,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_river_period_comparison 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_rainflood_similarity_times() -> Dict[str, Any]:
         """
         获取雨洪沙相似性分析时间信息。
@@ -1306,7 +1329,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_rainflood_similarity_times 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def get_rainflood_similarity_content(data_id: int) -> Dict[str, Any]:
         """
         获取雨洪沙相似性分析内容信息。
@@ -1333,7 +1356,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"get_rainflood_similarity_content 返回结果: {result}")
         return result
 
-    @mcp.tool
+    @mcp.tool()
     async def download_image(image_id: int) -> bytes:
         """
         下载图片。
