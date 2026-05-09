@@ -52,7 +52,7 @@ def register_warning_tools(mcp: FastMCP):
             "message": messages[status],
             "action_required": status in ("WARNING", "FLOOD")
         }
-        logger.info(f"check_water_level_warning 返回结果: {return_value}")
+        logger.debug(f"check_water_level_warning 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -94,7 +94,7 @@ def register_warning_tools(mcp: FastMCP):
             "message": messages[status],
             "action_required": status in ("WARNING", "FLOOD")
         }
-        logger.info(f"check_flow_warning 返回结果: {return_value}")
+        logger.debug(f"check_flow_warning 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -140,5 +140,5 @@ def register_warning_tools(mcp: FastMCP):
             "status": check_result['status'],
             "action_required": check_result['action_required']
         }
-        logger.info(f"generate_warning_bulletin 返回结果: {return_value}")
+        logger.debug(f"generate_warning_bulletin 返回结果: {return_value}")
         return return_value

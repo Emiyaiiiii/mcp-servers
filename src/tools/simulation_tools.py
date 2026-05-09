@@ -23,7 +23,7 @@ async def fly_to_location(location_name: str, session_id: str = None) -> dict:
     logger.info(f"调用 fly_to_location，收到参数: location_name={repr(location_name)}, session_id={repr(session_id)}")
     if location_name not in RESERVOIR_DATA:
         result = {"success": False, "error": f"未知位置: {location_name}"}
-        logger.info(f"fly_to_location 返回结果: {result}")
+        logger.debug(f"fly_to_location 返回结果: {result}")
         return result
     res = RESERVOIR_DATA[location_name]
     result = await scene_connector.send_camera_flyto_async(
@@ -40,7 +40,7 @@ async def fly_to_location(location_name: str, session_id: str = None) -> dict:
         "position": res['camera_position'],
         "response": result
     }
-    logger.info(f"fly_to_location 返回结果: {return_value}")
+    logger.debug(f"fly_to_location 返回结果: {return_value}")
     return return_value
 
 
@@ -48,17 +48,17 @@ async def control_floodgate(reservoir_name: str, gate_type: str, gate_index: int
     logger.info(f"调用 control_floodgate，收到参数: reservoir_name={repr(reservoir_name)}, gate_type={repr(gate_type)}, gate_index={gate_index}, is_open={is_open}, session_id={repr(session_id)}")
     if reservoir_name not in GATE_TYPES_MAP:
         result = {"success": False, "error": f"未知水库或该水库无闸门配置: {reservoir_name}"}
-        logger.info(f"control_floodgate 返回结果: {result}")
+        logger.debug(f"control_floodgate 返回结果: {result}")
         return result
     gates = RESERVOIR_DATA[reservoir_name].get('gates', {})
     if gate_type not in gates:
         result = {"success": False, "error": f"未知闸门类型: {gate_type}。可选: {', '.join(gates.keys())}"}
-        logger.info(f"control_floodgate 返回结果: {result}")
+        logger.debug(f"control_floodgate 返回结果: {result}")
         return result
     gate_ids = gates[gate_type]
     if gate_index < 1 or gate_index > len(gate_ids):
         result = {"success": False, "error": f"闸门索引无效: {gate_index}。可选范围: 1-{len(gate_ids)}"}
-        logger.info(f"control_floodgate 返回结果: {result}")
+        logger.debug(f"control_floodgate 返回结果: {result}")
         return result
     tunnel_id = gate_ids[gate_index - 1]
     result = await scene_connector.send_floodgate_control_async(tunnel_id=tunnel_id, is_open=is_open, is_clear=True, target_session=session_id)
@@ -71,7 +71,7 @@ async def control_floodgate(reservoir_name: str, gate_type: str, gate_index: int
         "command": "FUNC_SCENE_FLOODGATE",
         "response": result
     }
-    logger.info(f"control_floodgate 返回结果: {return_value}")
+    logger.debug(f"control_floodgate 返回结果: {return_value}")
     return return_value
 
 
@@ -79,7 +79,7 @@ async def set_reservoir_water_level(reservoir_name: str, water_level: float, ses
     logger.info(f"调用 set_reservoir_water_level，收到参数: reservoir_name={repr(reservoir_name)}, water_level={water_level}, session_id={repr(session_id)}")
     if reservoir_name not in RESERVOIR_DATA:
         result = {"success": False, "error": f"未知水库: {reservoir_name}"}
-        logger.info(f"set_reservoir_water_level 返回结果: {result}")
+        logger.debug(f"set_reservoir_water_level 返回结果: {result}")
         return result
     result = await scene_connector.send_set_water_level_async(reservoir_name=reservoir_name, water_level=water_level, target_session=session_id)
     return_value = {
@@ -89,7 +89,7 @@ async def set_reservoir_water_level(reservoir_name: str, water_level: float, ses
         "command": "FUNC_SCENE_SETWATERLEVEL",
         "response": result
     }
-    logger.info(f"set_reservoir_water_level 返回结果: {return_value}")
+    logger.debug(f"set_reservoir_water_level 返回结果: {return_value}")
     return return_value
 
 
@@ -97,7 +97,7 @@ async def create_water_level_placemark(placemark_id: str, reservoir_name: str, w
     logger.info(f"调用 create_water_level_placemark，收到参数: placemark_id={repr(placemark_id)}, reservoir_name={repr(reservoir_name)}, water_level={water_level}, altitude_offset={altitude_offset}, session_id={repr(session_id)}")
     if reservoir_name not in RESERVOIR_DATA:
         result = {"success": False, "error": f"未知水库: {reservoir_name}"}
-        logger.info(f"create_water_level_placemark 返回结果: {result}")
+        logger.debug(f"create_water_level_placemark 返回结果: {result}")
         return result
     base_pos = RESERVOIR_DATA[reservoir_name]["camera_position"]
     points = [base_pos[0], base_pos[1], water_level + altitude_offset]
@@ -112,7 +112,7 @@ async def create_water_level_placemark(placemark_id: str, reservoir_name: str, w
         "command": "FUNC_PLACEMARK_CREATE_POINT",
         "response": result
     }
-    logger.info(f"create_water_level_placemark 返回结果: {return_value}")
+    logger.debug(f"create_water_level_placemark 返回结果: {return_value}")
     return return_value
 
 
@@ -128,7 +128,7 @@ async def update_water_level_placemark(placemark_id: str, water_level: float, se
         "command": "FUNC_PLACEMARK_UPDATE",
         "response": result
     }
-    logger.info(f"update_water_level_placemark 返回结果: {return_value}")
+    logger.debug(f"update_water_level_placemark 返回结果: {return_value}")
     return return_value
 
 
@@ -141,7 +141,7 @@ async def destroy_placemarks(placemark_ids: List[str], session_id: str = None) -
         "command": "FUNC_PLACEMARK_DESTROY",
         "response": result
     }
-    logger.info(f"destroy_placemarks 返回结果: {return_value}")
+    logger.debug(f"destroy_placemarks 返回结果: {return_value}")
     return return_value
 
 
@@ -156,7 +156,7 @@ async def get_available_locations() -> dict:
             "camera_rotation": res['camera_rotation']
         })
     return_value = {"locations": locations}
-    logger.info(f"get_available_locations 返回结果: {return_value}")
+    logger.debug(f"get_available_locations 返回结果: {return_value}")
     return return_value
 
 

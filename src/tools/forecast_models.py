@@ -26,7 +26,7 @@ def register_forecast_models(mcp: FastMCP):
             rainfall = json.loads(rainfall_data) if isinstance(rainfall_data, str) else rainfall_data
         except json.JSONDecodeError:
             return_value = {"success": False, "error": "降雨数据格式错误，请提供有效的JSON格式"}
-            logger.info(f"run_hydrological_model 返回结果: {return_value}")
+            logger.debug(f"run_hydrological_model 返回结果: {return_value}")
             return return_value
 
         total_rainfall = sum(float(r.get("rainfall", 0)) for r in rainfall) if rainfall else 0
@@ -53,7 +53,7 @@ def register_forecast_models(mcp: FastMCP):
             "forecast_points": forecast_points,
             "message": f"水文预报模型执行成功，{basin}流域共产生{total_rainfall:.1f}mm降雨"
         }
-        logger.info(f"run_hydrological_model 返回结果: {return_value}")
+        logger.debug(f"run_hydrological_model 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -72,7 +72,7 @@ def register_forecast_models(mcp: FastMCP):
             init_cond = json.loads(initial_conditions) if isinstance(initial_conditions, str) else initial_conditions
         except json.JSONDecodeError:
             return_value = {"success": False, "error": "输入数据格式错误，请提供有效的JSON格式"}
-            logger.info(f"run_flood_routing_model 返回结果: {return_value}")
+            logger.debug(f"run_flood_routing_model 返回结果: {return_value}")
             return return_value
 
         initial_level = init_cond.get("initial_water_level", 100)
@@ -99,7 +99,7 @@ def register_forecast_models(mcp: FastMCP):
             "peak_attenuation": round(100 * (1 - 0.88), 2),
             "message": f"洪水演进模型执行成功，{river_section}演进计算完成"
         }
-        logger.info(f"run_flood_routing_model 返回结果: {return_value}")
+        logger.debug(f"run_flood_routing_model 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -399,6 +399,6 @@ def register_forecast_models(mcp: FastMCP):
             "schemes": schemes,
             "message": f"成功生成{len(schemes)}个调度方案单"
         }
-        logger.info(f"generate_dispatch_scheme 返回结果: {return_value}")
+        logger.debug(f"generate_dispatch_scheme 返回结果: {return_value}")
         return return_value
 

@@ -74,7 +74,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_OPEN_RESERVOIR_OVERVIEW",
             "response": result
         }
-        logger.info(f"navigate_to_reservoir_overview 返回结果: {return_value}")
+        logger.debug(f"navigate_to_reservoir_overview 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -102,10 +102,10 @@ def register_ui_tools(mcp: FastMCP):
             reservoirs = search_reservoir(reservoir_name)
             if reservoirs:
                 return_value = {"success": False, "error": f"未找到水库: {reservoir_name}，类似名称: {[r['name'] for r in reservoirs[:3]]}"}
-                logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
+                logger.debug(f"navigate_to_reservoir_detail 返回结果: {return_value}")
                 return return_value
             return_value = {"success": False, "error": f"未找到水库: {reservoir_name}"}
-            logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
+            logger.debug(f"navigate_to_reservoir_detail 返回结果: {return_value}")
             return return_value
 
         reservoir_name_cn = _get_reservoir_name_by_code(code)
@@ -129,7 +129,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_OPEN_RESERVOIR_DETAIL",
             "response": result
         }
-        logger.info(f"navigate_to_reservoir_detail 返回结果: {return_value}")
+        logger.debug(f"navigate_to_reservoir_detail 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -151,7 +151,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_OPEN_STATION_OVERVIEW",
             "response": result
         }
-        logger.info(f"navigate_to_station_overview 返回结果: {return_value}")
+        logger.debug(f"navigate_to_station_overview 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -179,10 +179,10 @@ def register_ui_tools(mcp: FastMCP):
             stations = search_station(station_name)
             if stations:
                 return_value = {"success": False, "error": f"未找到水文站: {station_name}，类似名称: {[s['name'] for s in stations[:3]]}"}
-                logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
+                logger.debug(f"navigate_to_station_detail 返回结果: {return_value}")
                 return return_value
             return_value = {"success": False, "error": f"未找到水文站: {station_name}"}
-            logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
+            logger.debug(f"navigate_to_station_detail 返回结果: {return_value}")
             return return_value
 
         station_name_cn = _get_station_name_by_code(code)
@@ -204,7 +204,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_OPEN_STATION_DETAIL",
             "response": result
         }
-        logger.info(f"navigate_to_station_detail 返回结果: {return_value}")
+        logger.debug(f"navigate_to_station_detail 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -225,7 +225,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_NAVIGATE_RAINFALL",
             "response": result
         }
-        logger.info(f"navigate_to_rainfall_overview 返回结果: {return_value}")
+        logger.debug(f"navigate_to_rainfall_overview 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -263,7 +263,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_NAVIGATE_RAINFALL",
             "response": result
         }
-        logger.info(f"navigate_to_rainfall_basin 返回结果: {return_value}")
+        logger.debug(f"navigate_to_rainfall_basin 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -296,7 +296,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_NAVIGATE_SIMILAR_RAINFALL",
             "response": result
         }
-        logger.info(f"navigate_to_similar_rainfall_page 返回结果: {return_value}")
+        logger.debug(f"navigate_to_similar_rainfall_page 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -323,10 +323,10 @@ def register_ui_tools(mcp: FastMCP):
             reservoirs = search_reservoir(reservoir_name)
             if reservoirs:
                 return_value = {"success": False, "error": f"未找到水库: {reservoir_name}，类似名称: {[r['name'] for r in reservoirs[:3]]}"}
-                logger.info(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
+                logger.debug(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
                 return return_value
             return_value = {"success": False, "error": f"未找到水库: {reservoir_name}"}
-            logger.info(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
+            logger.debug(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
             return return_value
 
         reservoir_name_cn = _get_reservoir_name_by_code(code)
@@ -350,7 +350,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_NAVIGATE_RESERVOIR_FORECAST",
             "response": result
         }
-        logger.info(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
+        logger.debug(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -372,7 +372,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_OPEN_CONTROL_GUIDANCE",
             "response": result
         }
-        logger.info(f"navigate_to_control_guidance_overview 返回结果: {return_value}")
+        logger.debug(f"navigate_to_control_guidance_overview 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -400,7 +400,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_OPEN_CONTROL_GUIDANCE",
             "response": result
         }
-        logger.info(f"navigate_to_control_guidance_section 返回结果: {return_value}")
+        logger.debug(f"navigate_to_control_guidance_section 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -427,10 +427,10 @@ def register_ui_tools(mcp: FastMCP):
             stations = search_station(station_name)
             if stations:
                 return_value = {"success": False, "error": f"未找到水文站: {station_name}，类似名称: {[s['name'] for s in stations[:3]]}"}
-                logger.info(f"navigate_to_station_forecast_page 返回结果: {return_value}")
+                logger.debug(f"navigate_to_station_forecast_page 返回结果: {return_value}")
                 return return_value
             return_value = {"success": False, "error": f"未找到水文站: {station_name}"}
-            logger.info(f"navigate_to_station_forecast_page 返回结果: {return_value}")
+            logger.debug(f"navigate_to_station_forecast_page 返回结果: {return_value}")
             return return_value
 
         station_name_cn = _get_station_name_by_code(code)
@@ -452,7 +452,7 @@ def register_ui_tools(mcp: FastMCP):
             "command": "FUNC_UI_NAVIGATE_STATION_FORECAST",
             "response": result
         }
-        logger.info(f"navigate_to_station_forecast_page 返回结果: {return_value}")
+        logger.debug(f"navigate_to_station_forecast_page 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -535,7 +535,7 @@ def register_ui_tools(mcp: FastMCP):
 
         await send_ui_command_async("FUNC_UI_DISPATCH_SCHEME", scheme, target="page", session_id=session_id)
 
-        logger.info(f"generate_dispatch_scheme 返回结果: {scheme}")
+        logger.debug(f"generate_dispatch_scheme 返回结果: {scheme}")
         return scheme
 
     @mcp.tool()
@@ -566,7 +566,7 @@ def register_ui_tools(mcp: FastMCP):
                     "error": f"未找到调度方案: {scheme_id}",
                     "task_id": task_id
                 }
-                logger.info(f"send_simulation_command 返回结果: {return_value}")
+                logger.debug(f"send_simulation_command 返回结果: {return_value}")
                 return return_value
         else:
             schemes = get_all_schemes()
@@ -588,5 +588,39 @@ def register_ui_tools(mcp: FastMCP):
             "message": "预演指令已发送",
             "command": "FUNC_UI_START_SIMULATION"
         }
-        logger.info(f"send_simulation_command 返回结果: {return_value}")
+        logger.debug(f"send_simulation_command 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool()
+    async def trigger_simulation_execution(
+        task_id: str,
+        session_id: str = None
+    ) -> dict:
+        """向前端发送触发预演执行的指令，启动预演任务。
+
+        Args:
+            task_id: 预演任务ID（由 send_simulation_command 返回的 task_id）
+            session_id: 目标 session_id（自动从上下文获取，无需用户输入）
+
+        Returns:
+            触发执行指令的确认信息
+        """
+        logger.info(f"调用 trigger_simulation_execution，收到参数: task_id={repr(task_id)}, session_id={repr(session_id)}")
+        from datetime import datetime
+
+        data = {
+            "task_id": task_id,
+            "execute_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "action": "execute"
+        }
+
+        await send_ui_command_async("FUNC_UI_TRIGGER_SIMULATION", data, target="page", session_id=session_id)
+
+        return_value = {
+            "success": True,
+            "task_id": task_id,
+            "message": "预演执行指令已发送",
+            "command": "FUNC_UI_TRIGGER_SIMULATION"
+        }
+        logger.debug(f"trigger_simulation_execution 返回结果: {return_value}")
         return return_value

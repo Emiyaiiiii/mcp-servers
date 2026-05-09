@@ -87,7 +87,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
             zqxl_data = json.loads(zqxl) if isinstance(zqxl, str) and zqxl else DEFAULT_ZQXL
         except json.JSONDecodeError:
             return_value = {"success": False, "error": "输入数据格式错误，请提供有效的JSON格式"}
-            logger.info(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
+            logger.debug(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
             return return_value
 
         try:
@@ -124,7 +124,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 "result": result,
                 "message": "小浪底水库补偿调度模式执行成功"
             }
-            logger.info(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
+            logger.debug(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
             return return_value
 
         except requests.exceptions.RequestException as e:
@@ -136,7 +136,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 "reservoir": "小浪底水库",
                 "dispatch_mode": "补偿调度模式"
             }
-            logger.info(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
+            logger.debug(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
             return return_value
 
     @mcp.tool()
@@ -195,7 +195,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
             zqxl_data = json.loads(zqxl) if isinstance(zqxl, str) and zqxl else DEFAULT_ZQXL
         except json.JSONDecodeError:
             return_value = {"success": False, "error": "输入数据格式错误，请提供有效的JSON格式"}
-            logger.info(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
+            logger.debug(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
             return return_value
 
         try:
@@ -230,7 +230,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 "result": result,
                 "message": "小浪底水库水位控制模式执行成功"
             }
-            logger.info(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
+            logger.debug(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
             return return_value
 
         except requests.exceptions.RequestException as e:
@@ -242,5 +242,5 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 "reservoir": "小浪底水库",
                 "dispatch_mode": "水位控制模式"
             }
-            logger.info(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
+            logger.debug(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
             return return_value

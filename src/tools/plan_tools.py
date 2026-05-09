@@ -32,11 +32,11 @@ def register_plan_tools(mcp: FastMCP):
                         "description": _get_template_description(f)
                     })
             return_value = {"templates": templates}
-            logger.info(f"list_plan_templates 返回结果: {return_value}")
+            logger.debug(f"list_plan_templates 返回结果: {return_value}")
             return return_value
         except Exception as e:
             return_value = {"error": f"获取模板列表时出错: {str(e)}"}
-            logger.info(f"list_plan_templates 返回结果: {return_value}")
+            logger.debug(f"list_plan_templates 返回结果: {return_value}")
             return return_value
 
     @mcp.tool()
@@ -55,16 +55,16 @@ def register_plan_tools(mcp: FastMCP):
             env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
             template = env.get_template(template_name)
             return_value = template.render()
-            logger.info(f"load_plan_template 返回结果: {repr(return_value)}")
+            logger.debug(f"load_plan_template 返回结果: {repr(return_value)}")
             return return_value
         except TemplateNotFound:
             available = [f for f in os.listdir(TEMPLATE_DIR) if f.endswith(('.md', '.j2', '.jinja'))]
             return_value = f"模板 '{template_name}' 不存在。可用模板: {available}"
-            logger.info(f"load_plan_template 返回结果: {repr(return_value)}")
+            logger.debug(f"load_plan_template 返回结果: {repr(return_value)}")
             return return_value
         except Exception as e:
             return_value = f"加载模板时出错: {str(e)}"
-            logger.info(f"load_plan_template 返回结果: {repr(return_value)}")
+            logger.debug(f"load_plan_template 返回结果: {repr(return_value)}")
             return return_value
 
     @mcp.tool()
@@ -134,7 +134,7 @@ def register_plan_tools(mcp: FastMCP):
                     "metadata": metadata,
                     "summary": "\n\n".join(summary) if summary else "未找到相关知识"
                 }
-                logger.info(f"query_knowledge_base 返回结果: 成功检索到 {len(entities)} 个实体, {len(relationships)} 个关系, {len(chunks)} 个文本片段")
+                logger.debug(f"query_knowledge_base 返回结果: 成功检索到 {len(entities)} 个实体, {len(relationships)} 个关系, {len(chunks)} 个文本片段")
                 return return_value
             
             else:

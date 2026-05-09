@@ -37,3 +37,5 @@ dist/
 # 忽略 OS 相关文件
 .DS_Store
 Thumbs.db
+
+data/.auth_token.json
