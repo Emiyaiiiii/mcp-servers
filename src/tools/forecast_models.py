@@ -338,11 +338,31 @@ def register_forecast_models(mcp: FastMCP):
             
             reservoirs_output = {}
             for res_name, config in reservoir_config.items():
+                timeseries = []
+                for hour in range(168):
+                    timeseries.append({
+                        "time": timestamps[hour],
+                        "water_level": reservoirs_data[res_name]["water_level"][hour],
+                        "storage": reservoirs_data[res_name]["storage"][hour],
+                        "inflow": reservoirs_data[res_name]["inflow"][hour],
+                        "outflow": reservoirs_data[res_name]["outflow"][hour]
+                    })
+                
                 reservoirs_output[res_name] = {
-                    "water_level": reservoirs_data[res_name]["water_level"],
-                    "storage": reservoirs_data[res_name]["storage"],
-                    "inflow": reservoirs_data[res_name]["inflow"],
-                    "outflow": reservoirs_data[res_name]["outflow"]
+                    "station_code": config["code"],
+                    "timeseries": timeseries
+                }
+            
+            stations_output = {}
+            for station in hydrological_stations:
+                timeseries = []
+                for hour in range(168):
+                    timeseries.append({
+                        "time": timestamps[hour],
+                        "flow": stations_data[station]["flow"][hour]
+                    })
+                stations_output[station] = {
+                    "timeseries": timeseries
                 }
             
             return {
@@ -350,9 +370,8 @@ def register_forecast_models(mcp: FastMCP):
                 "scheme_name": f"{base_datetime.year}年汛期调度方案{unique_id.split('-')[1]}",
                 "start_date": scheme_start_date,
                 "end_date": scheme_end_date,
-                "timestamps": timestamps,
                 "reservoirs": reservoirs_output,
-                "hydrological_stations": stations_data
+                "hydrological_stations": stations_output
             }
         
         schemes = [generate_scheme(i + 1) for i in range(min(count, 5))]
