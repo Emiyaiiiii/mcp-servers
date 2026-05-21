@@ -1,3 +1,4 @@
+from logging import info
 import requests
 from typing import Dict, Any, List
 from mcp.server.fastmcp import FastMCP
@@ -40,18 +41,20 @@ def _resolve_station(name_or_code: str) -> str | None:
     return name_or_code if name_or_code else None
 
 def _resolve_reservoir_for_api(name_or_code: str) -> str | None:
-    """解析水库名称或编码，只返回stationCode"""
+    """解析水库名称或编码，返回stationCode（BDA开头的编码）
+    
+    现在 get_reservoir_code 已经直接返回 stationCode，
+    此函数保持向后兼容。
+    """
     if not name_or_code:
         return None
     
-    # 先获取水库编码
-    reservoir_code = get_reservoir_code(name_or_code)
-    if not reservoir_code:
+    # get_reservoir_code 现在直接返回 stationCode
+    station_code = get_reservoir_code(name_or_code)
+    if not station_code:
         # 如果找不到编码，直接返回原始输入
         return name_or_code
     
-    # 获取stationCode
-    station_code = get_reservoir_station_code(reservoir_code)
     return station_code
 
 def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool = True) -> Dict[str, Any]:
@@ -528,39 +531,39 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_daily_hydrology 返回结果: {result}")
         return result
 
-    @mcp.tool()
-    async def list_reservoirs(reservoir_type: int) -> Dict[str, Any]:
-        """
-        获取水库水文站关系列表（包括伊洛河流域水库）。
+    # @mcp.tool()
+    # async def list_reservoirs(reservoir_type: int) -> Dict[str, Any]:
+    #     """
+    #     获取水库关系列表（包括伊洛河流域水库）。
 
-        Args:
-            reservoir_type: 水库类型（1-黄河流域主要水库；2-伊洛河水库，必传）
+    #     Args:
+    #         reservoir_type: 水库类型（1-黄河流域主要水库；2-伊洛河水库，必传）
 
-        Returns:
-            {
-                "code": 200,
-                "msg": "",
-                "data": [
-                    {
-                        "ennmcd": "BDA00000011",    // 水库编码
-                        "swcd": "40100400",         // 水库8位码
-                        "ennm": "龙羊峡",           // 水库名称
-                        "inswcd": "40100780",       // 入库取的水库编码
-                        "outswcd": "40100780",      // 出库取的水库编码
-                        "upstcd": "401T0350",       // 上游水文站编码
-                        "downstcd": "40100500",     // 下游水文站编码
-                        "upstnm": "唐乃亥(羊曲下)", // 上游水文站名称
-                        "downstnm": "贵德（二）"    // 下游水文站名称
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 list_reservoirs，收到参数: reservoir_type={reservoir_type}")
-        url = f"{BASE_URL}/project/resv/rqList"
-        params = {"type": reservoir_type}
-        result = _get(url, params)
-        logger.debug(f"list_reservoirs 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,
+    #             "msg": "",
+    #             "data": [
+    #                 {
+    #                     "ennmcd": "BDA00000011",    // 水库编码
+    #                     "swcd": "40100400",         // 水库8位码
+    #                     "ennm": "龙羊峡",           // 水库名称
+    #                     "inswcd": "40100780",       // 入库取的水库编码
+    #                     "outswcd": "40100780",      // 出库取的水库编码
+    #                     "upstcd": "401T0350",       // 上游水文站编码
+    #                     "downstcd": "40100500",     // 下游水文站编码
+    #                     "upstnm": "唐乃亥(羊曲下)", // 上游水文站名称
+    #                     "downstnm": "贵德（二）"    // 下游水文站名称
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 list_reservoirs，收到参数: reservoir_type={reservoir_type}")
+    #     url = f"{BASE_URL}/project/resv/rqList"
+    #     params = {"type": reservoir_type}
+    #     result = _get(url, params)
+    #     logger.debug(f"list_reservoirs 返回结果: {result}")
+    #     return result
 
     @mcp.tool()
     async def get_reservoir_features(reservoir: str) -> Dict[str, Any]:
@@ -764,134 +767,134 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_reservoir_realtime 返回结果: {result}")
         return result
 
-    @mcp.tool()
-    async def get_reservoir_realtime_with_yiluo(
-        reservoir: str,
-        start_date: str,
-        end_date: str
-    ) -> Dict[str, Any]:
-        """
-        获取水库实时水情（包括伊洛河流域水库）。
+    # @mcp.tool()
+    # async def get_reservoir_realtime_with_yiluo(
+    #     reservoir: str,
+    #     start_date: str,
+    #     end_date: str
+    # ) -> Dict[str, Any]:
+    #     """
+    #     获取水库实时水情（包括伊洛河流域水库）。
 
-        Args:
-            reservoir: 水库名称（支持模糊匹配，必传）
-            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
-            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
+    #     Args:
+    #         reservoir: 水库名称（支持模糊匹配，必传）
+    #         start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+    #         end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
-        Returns:
-            {
-                "code": 200,
-                "msg": "",
-                "data": [
-                    {
-                        "date": 1696204800000,    // 时间
-                        "ennm": "三门峡",         // 水库名称
-                        "ennmcd": "BDA00000111",  // 水库编码
-                        "inflow": 442.0000,       // 入库流量
-                        "level": 312.06,          // 水位
-                        "outflow": 161.0000,      // 出库流量
-                        "wq": 2.55                // 蓄水量
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 get_reservoir_realtime_with_yiluo，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir_for_api(reservoir)
-        if not reservoir_code:
-            result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"get_reservoir_realtime_with_yiluo 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/rdayrt/rqList"
-        params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
-        result = _get(url, params)
-        logger.debug(f"get_reservoir_realtime_with_yiluo 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,
+    #             "msg": "",
+    #             "data": [
+    #                 {
+    #                     "date": 1696204800000,    // 时间
+    #                     "ennm": "三门峡",         // 水库名称
+    #                     "ennmcd": "BDA00000111",  // 水库编码
+    #                     "inflow": 442.0000,       // 入库流量
+    #                     "level": 312.06,          // 水位
+    #                     "outflow": 161.0000,      // 出库流量
+    #                     "wq": 2.55                // 蓄水量
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 get_reservoir_realtime_with_yiluo，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
+    #     reservoir_code = _resolve_reservoir_for_api(reservoir)
+    #     if not reservoir_code:
+    #         result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
+    #         logger.debug(f"get_reservoir_realtime_with_yiluo 返回结果: {result}")
+    #         return result
+    #     url = f"{BASE_URL}/hydrometric/rdayrt/rqList"
+    #     params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
+    #     result = _get(url, params)
+    #     logger.debug(f"get_reservoir_realtime_with_yiluo 返回结果: {result}")
+    #     return result
 
-    @mcp.tool()
-    async def get_reservoir_daily(
-        reservoir: str,
-        start_date: str,
-        end_date: str
-    ) -> Dict[str, Any]:
-        """
-        获取水库日均水情。
+    # @mcp.tool()
+    # async def get_reservoir_daily(
+    #     reservoir: str,
+    #     start_date: str,
+    #     end_date: str
+    # ) -> Dict[str, Any]:
+    #     """
+    #     获取水库日均水情。
 
-        Args:
-            reservoir: 水库名称（支持模糊匹配，必传）
-            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
-            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
+    #     Args:
+    #         reservoir: 水库名称（支持模糊匹配，必传）
+    #         start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+    #         end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
-        Returns:
-            {
-                "code": 200,
-                "msg": "",
-                "data": [
-                    {
-                        "date": 1696204800000,    // 时间
-                        "ennm": "三门峡",         // 水库名称
-                        "ennmcd": "BDA00000111",  // 水库编码
-                        "inflow": 442.0000,       // 入库流量
-                        "level": 312.06,          // 水位
-                        "outflow": 161.0000,      // 出库流量
-                        "wq": 2.55                // 蓄水量
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 get_reservoir_daily，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir_for_api(reservoir)
-        if not reservoir_code:
-            result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"get_reservoir_daily 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/rdayrt/list"
-        params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
-        result = _get(url, params)
-        logger.debug(f"get_reservoir_daily 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,
+    #             "msg": "",
+    #             "data": [
+    #                 {
+    #                     "date": 1696204800000,    // 时间
+    #                     "ennm": "三门峡",         // 水库名称
+    #                     "ennmcd": "BDA00000111",  // 水库编码
+    #                     "inflow": 442.0000,       // 入库流量
+    #                     "level": 312.06,          // 水位
+    #                     "outflow": 161.0000,      // 出库流量
+    #                     "wq": 2.55                // 蓄水量
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 get_reservoir_daily，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
+    #     reservoir_code = _resolve_reservoir_for_api(reservoir)
+    #     if not reservoir_code:
+    #         result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
+    #         logger.debug(f"get_reservoir_daily 返回结果: {result}")
+    #         return result
+    #     url = f"{BASE_URL}/hydrometric/rdayrt/list"
+    #     params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
+    #     result = _get(url, params)
+    #     logger.debug(f"get_reservoir_daily 返回结果: {result}")
+    #     return result
 
-    @mcp.tool()
-    async def get_reservoir_daily_with_yiluo(
-        reservoir: str,
-        start_date: str,
-        end_date: str
-    ) -> Dict[str, Any]:
-        """
-        获取水库日均水情（包括伊洛河流域水库）。
+    # @mcp.tool()
+    # async def get_reservoir_daily_with_yiluo(
+    #     reservoir: str,
+    #     start_date: str,
+    #     end_date: str
+    # ) -> Dict[str, Any]:
+    #     """
+    #     获取水库日均水情（包括伊洛河流域水库）。
 
-        Args:
-            reservoir: 水库名称（支持模糊匹配，必传）
-            start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
-            end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
+    #     Args:
+    #         reservoir: 水库名称（支持模糊匹配，必传）
+    #         start_date: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+    #         end_date: 截止时间（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
-        Returns:
-            {
-                "code": 200,
-                "msg": "",
-                "data": [
-                    {
-                        "date": 1696204800000,    // 时间
-                        "ennm": "三门峡",         // 水库名称
-                        "ennmcd": "BDA00000111",  // 水库编码
-                        "inflow": 442.0000,       // 入库流量
-                        "level": 312.06,          // 水位
-                        "outflow": 161.0000,      // 出库流量
-                        "wq": 2.55                // 蓄水量
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 get_reservoir_daily_with_yiluo，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        reservoir_code = _resolve_reservoir_for_api(reservoir)
-        if not reservoir_code:
-            result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"get_reservoir_daily_with_yiluo 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/rdayrt/rqList"
-        params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
-        result = _get(url, params)
-        logger.debug(f"get_reservoir_daily_with_yiluo 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,
+    #             "msg": "",
+    #             "data": [
+    #                 {
+    #                     "date": 1696204800000,    // 时间
+    #                     "ennm": "三门峡",         // 水库名称
+    #                     "ennmcd": "BDA00000111",  // 水库编码
+    #                     "inflow": 442.0000,       // 入库流量
+    #                     "level": 312.06,          // 水位
+    #                     "outflow": 161.0000,      // 出库流量
+    #                     "wq": 2.55                // 蓄水量
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 get_reservoir_daily_with_yiluo，收到参数: reservoir={repr(reservoir)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
+    #     reservoir_code = _resolve_reservoir_for_api(reservoir)
+    #     if not reservoir_code:
+    #         result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
+    #         logger.debug(f"get_reservoir_daily_with_yiluo 返回结果: {result}")
+    #         return result
+    #     url = f"{BASE_URL}/hydrometric/rdayrt/rqList"
+    #     params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
+    #     result = _get(url, params)
+    #     logger.debug(f"get_reservoir_daily_with_yiluo 返回结果: {result}")
+    #     return result
 
     @mcp.tool()
     async def get_river_latest_realtime() -> Dict[str, Any]:
@@ -1304,30 +1307,30 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_river_period_comparison 返回结果: {result}")
         return result
 
-    @mcp.tool()
-    async def get_rainflood_similarity_times() -> Dict[str, Any]:
-        """
-        获取雨洪沙相似性分析时间信息。
+    # @mcp.tool()
+    # async def get_rainflood_similarity_times() -> Dict[str, Any]:
+    #     """
+    #     获取雨洪沙相似性分析时间信息。
 
-        Returns:
-            {
-                "code": 200,
-                "msg": "",
-                "data": [
-                    {
-                        "date": 1692545088000,    // 时间日期
-                        "month": 8,               // 月份
-                        "year": 2023,             // 年份
-                        "id": 7                   // 数据id
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 get_rainflood_similarity_times，收到参数: (无)")
-        url = f"{BASE_URL}/rainfall/sanalysis/getCombo"
-        result = _get(url)
-        logger.debug(f"get_rainflood_similarity_times 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,
+    #             "msg": "",
+    #             "data": [
+    #                 {
+    #                     "date": 1692545088000,    // 时间日期
+    #                     "month": 8,               // 月份
+    #                     "year": 2023,             // 年份
+    #                     "id": 7                   // 数据id
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 get_rainflood_similarity_times，收到参数: (无)")
+    #     url = f"{BASE_URL}/rainfall/sanalysis/getCombo"
+    #     result = _get(url)
+    #     logger.debug(f"get_rainflood_similarity_times 返回结果: {result}")
+    #     return result
 
     @mcp.tool()
     async def get_rainflood_similarity_content(data_id: int) -> Dict[str, Any]:

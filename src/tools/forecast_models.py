@@ -379,6 +379,39 @@ def register_forecast_models(mcp: FastMCP):
         for scheme in schemes:
             save_scheme(scheme)
         
+        def calculate_scheme_summary(scheme):
+            stats = {}
+            for res_name, res_data in scheme["reservoirs"].items():
+                levels = [ts["water_level"] for ts in res_data["timeseries"]]
+                storages = [ts["storage"] for ts in res_data["timeseries"]]
+                inflows = [ts["inflow"] for ts in res_data["timeseries"]]
+                outflows = [ts["outflow"] for ts in res_data["timeseries"]]
+                
+                stats[res_name] = {
+                    "water_level_range": [round(min(levels), 2), round(max(levels), 2)],
+                    "storage_range": [round(min(storages), 2), round(max(storages), 2)],
+                    "avg_inflow": round(sum(inflows) / len(inflows), 2),
+                    "avg_outflow": round(sum(outflows) / len(outflows), 2)
+                }
+            
+            huayuankou_flows = [ts["flow"] for ts in scheme["hydrological_stations"]["花园口"]["timeseries"]]
+            stats["花园口"] = {
+                "flow_range": [round(min(huayuankou_flows), 2), round(max(huayuankou_flows), 2)],
+                "avg_flow": round(sum(huayuankou_flows) / len(huayuankou_flows), 2)
+            }
+            
+            return stats
+        
+        schemes_summary = []
+        for scheme in schemes:
+            schemes_summary.append({
+                "scheme_id": scheme["scheme_id"],
+                "scheme_name": scheme["scheme_name"],
+                "start_date": scheme["start_date"],
+                "end_date": scheme["end_date"],
+                "stats": calculate_scheme_summary(scheme)
+            })
+        
         return_value = {
             "success": True,
             "command": "FUNC_GENERATE_DISPATCH_SCHEME",
@@ -396,7 +429,7 @@ def register_forecast_models(mcp: FastMCP):
                     "河口村水库": {"max_level": hkc_max_level, "max_storage": hkc_max_storage}
                 }
             },
-            "schemes": schemes,
+            "schemes_summary": schemes_summary,
             "message": f"成功生成{len(schemes)}个调度方案单"
         }
         logger.debug(f"generate_dispatch_scheme 返回结果: {return_value}")

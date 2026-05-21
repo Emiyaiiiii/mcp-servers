@@ -624,3 +624,40 @@ def register_ui_tools(mcp: FastMCP):
         }
         logger.debug(f"trigger_simulation_execution 返回结果: {return_value}")
         return return_value
+
+    @mcp.tool()
+    async def send_plan_document_url(
+        document_url: str,
+        document_name: str,
+        session_id: str = None
+    ) -> dict:
+        """将预案文档URL发送给前端展示或下载。
+
+        Args:
+            document_url: 预案文档的访问URL，例如: "http://localhost:8080/docs/五库联调调度方案-20260512-103000.md"
+            document_name: 预案文档名称，用于前端显示，例如: "五库联调调度方案-20260512.md"
+            session_id: 目标 session_id（自动从上下文获取，无需用户输入）
+
+        Returns:
+            发送文档URL的确认信息
+        """
+        logger.info(f"调用 send_plan_document_url，收到参数: document_url={repr(document_url)}, document_name={repr(document_name)}, session_id={repr(session_id)}")
+        from datetime import datetime
+
+        data = {
+            "document_url": document_url,
+            "document_name": document_name,
+            "send_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        await send_ui_command_async("FUNC_UI_SHOW_PLAN_DOCUMENT", data, target="page", session_id=session_id)
+
+        return_value = {
+            "success": True,
+            "document_url": document_url,
+            "document_name": document_name,
+            "message": "预案文档URL已发送",
+            "command": "FUNC_UI_SHOW_PLAN_DOCUMENT"
+        }
+        logger.debug(f"send_plan_document_url 返回结果: {return_value}")
+        return return_value
