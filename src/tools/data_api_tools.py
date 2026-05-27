@@ -1,5 +1,6 @@
 from logging import info
 import requests
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 from mcp.server.fastmcp import FastMCP
 from src.config.settings import settings
@@ -8,6 +9,48 @@ from src.services.auth_service import auth_service
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _format_timestamp(value: Any) -> str | None:
+    """将时间戳转换为可读日期格式（北京时间 UTC+8）"""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        # 13位毫秒时间戳
+        if 100000000000 <= value <= 9999999999999:
+            beijing_tz = timezone(timedelta(hours=8))
+            if value >= 1000000000000:
+                dt = datetime.fromtimestamp(value / 1000, tz=beijing_tz)
+            else:
+                # 12位时间戳，假设是毫秒
+                dt = datetime.fromtimestamp(value / 1000, tz=beijing_tz)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        # 10位秒时间戳
+        elif 1000000000 <= value <= 9999999999:
+            beijing_tz = timezone(timedelta(hours=8))
+            dt = datetime.fromtimestamp(value, tz=beijing_tz)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+    return None
+
+
+def _format_date_fields(data: Any) -> Any:
+    """递归遍历数据结构，将所有 date 字段的时间戳转换为可读日期"""
+    if isinstance(data, dict):
+        result = {}
+        for key, value in data.items():
+            if key in ("date", "dt", "wdate", "tm", "time") and isinstance(value, (int, float)):
+                formatted = _format_timestamp(value)
+                if formatted:
+                    result[key] = formatted
+                else:
+                    result[key] = value
+            else:
+                result[key] = _format_date_fields(value)
+        return result
+    elif isinstance(data, list):
+        return [_format_date_fields(item) for item in data]
+    else:
+        return data
 
 BASE_URL = getattr(settings, 'DATA_API_BASE_URL', 'http://wt.hxyai.cn/fx')
 
@@ -86,7 +129,7 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
                 response.raise_for_status()
                 result = response.json()
 
-        return result
+        return _format_date_fields(result)
 
     except requests.exceptions.RequestException as e:
         logger.error(f"请求异常: {e}")
@@ -244,7 +287,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"调用 get_rainfall_statistics，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}")
-        url = f"{BASE_URL}/rainfall/hourrt/staRainfall"
+        url = f"{BASE_URL}/rainfall/hourrth/getRainfall"
         params = {
             "startTime": start_time,
             "endTime": end_time

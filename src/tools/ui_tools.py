@@ -634,7 +634,7 @@ def register_ui_tools(mcp: FastMCP):
         """将预案文档URL发送给前端展示或下载。
 
         Args:
-            document_url: 预案文档的访问URL，例如: "http://localhost:8080/docs/五库联调调度方案-20260512-103000.md"
+            document_url: 预案文档的访问URL，例如: "/mnt/user-data/outputs/五库联调调度预案-DS-0001-20260526.md"
             document_name: 预案文档名称，用于前端显示，例如: "五库联调调度方案-20260512.md"
             session_id: 目标 session_id（自动从上下文获取，无需用户输入）
 
