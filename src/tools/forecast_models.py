@@ -264,14 +264,12 @@ def register_forecast_models(mcp: FastMCP):
         base_data, base_stations, base_timestamps = load_base_data()
         
         def generate_scheme(scheme_id: int):
-            current_base_time = base_timestamp + (scheme_id - 1) * 86400000 * 7
-            
             timestamps = []
             reservoirs_data = {res_name: {"water_level": [], "storage": [], "inflow": [], "outflow": []} for res_name in reservoir_config}
             stations_data = {station: {"flow": []} for station in hydrological_stations}
             
             for hour in range(168):
-                time_stamp = current_base_time + hour * 3600000
+                time_stamp = base_timestamp + hour * 3600000
                 timestamps.append(time_stamp)
                 
                 total_outflow = 0
@@ -331,8 +329,8 @@ def register_forecast_models(mcp: FastMCP):
                     stations_data["黑石关"]["flow"].append(max(0, round(base_flow * random.uniform(0.08, 0.2), 2)))
                     stations_data["花园口"]["flow"].append(max(0, round(base_flow * random.uniform(0.6, 0.85), 2)))
             
-            scheme_start_date = (base_datetime + timedelta(days=(scheme_id - 1) * 7)).strftime("%Y-%m-%d")
-            scheme_end_date = (base_datetime + timedelta(days=(scheme_id - 1) * 7 + 7)).strftime("%Y-%m-%d")
+            scheme_start_date = base_datetime.strftime("%Y-%m-%d")
+            scheme_end_date = (base_datetime + timedelta(days=7)).strftime("%Y-%m-%d")
             
             unique_id = generate_unique_id()
             

@@ -558,6 +558,7 @@ def register_ui_tools(mcp: FastMCP):
 
         task_id = f"sim_{uuid.uuid4().hex[:8]}"
 
+        scheme = None
         if scheme_id:
             scheme = get_scheme(scheme_id)
             if not scheme:
@@ -572,10 +573,85 @@ def register_ui_tools(mcp: FastMCP):
             schemes = get_all_schemes()
             scheme = schemes[0] if schemes else None
 
+        if not scheme:
+            return_value = {
+                "success": False,
+                "error": "未找到可用的调度方案",
+                "task_id": task_id
+            }
+            logger.debug(f"send_simulation_command 返回结果: {return_value}")
+            return return_value
+
+        reservoir_schemes = {}
+        try:
+            from src.tools.plan_tools import _generate_xiaolangdi_scheme_core, _generate_sanmenxia_scheme_core
+            
+            reservoirs = scheme.get("reservoirs", {})
+            
+            xld_data = reservoirs.get("小浪底水库", {})
+            if xld_data:
+                timeseries = xld_data.get("timeseries", [])
+                if timeseries:
+                    max_outflow = None
+                    max_level = None
+                    for ts in timeseries:
+                        outflow = ts.get("outflow")
+                        level = ts.get("water_level")
+                        if outflow is not None and (max_outflow is None or outflow > max_outflow):
+                            max_outflow = outflow
+                        if level is not None and (max_level is None or level > max_level):
+                            max_level = level
+                    xld_scheme = _generate_xiaolangdi_scheme_core(
+                        date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        liu_liang=max_outflow if max_outflow is not None else 1500,
+                        shui_wei=max_level if max_level is not None else 240,
+                        han_sha_liang=10.0
+                    )
+                    reservoir_schemes["小浪底水库"] = xld_scheme
+            
+            smx_data = reservoirs.get("三门峡水库", {})
+            if smx_data:
+                timeseries = smx_data.get("timeseries", [])
+                if timeseries:
+                    max_outflow = None
+                    max_level = None
+                    for ts in timeseries:
+                        outflow = ts.get("outflow")
+                        level = ts.get("water_level")
+                        if outflow is not None and (max_outflow is None or outflow > max_outflow):
+                            max_outflow = outflow
+                        if level is not None and (max_level is None or level > max_level):
+                            max_level = level
+                    smx_scheme = _generate_sanmenxia_scheme_core(
+                        date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        liu_liang=max_outflow if max_outflow is not None else 1000,
+                        shui_wei=max_level if max_level is not None else 310,
+                        han_sha_liang=10.0
+                    )
+                    reservoir_schemes["三门峡水库"] = smx_scheme
+        except Exception as e:
+            logger.warning(f"生成孔洞开启方案失败: {e}")
+
+        scheme_details = {
+            "scheme_id": scheme.get("scheme_id", scheme_id),
+            "scheme_name": scheme.get("scheme_name", ""),
+            "description": scheme.get("description", ""),
+            "basin": scheme.get("basin", ""),
+            "start_date": scheme.get("start_date", ""),
+            "end_date": scheme.get("end_date", ""),
+            "constraints": scheme.get("constraints", []),
+            "details": scheme.get("details", []),
+            "constraints_applied": scheme.get("constraints_applied", {}),
+            "original_scheme": scheme,
+            "reservoir_schemes": reservoir_schemes
+        }
+
         data = {
             "task_id": task_id,
             "scheme_id": scheme_id,
             "scheme": scheme,
+            "scheme_details": scheme_details,
+            "reservoir_schemes": reservoir_schemes,
             "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -585,8 +661,11 @@ def register_ui_tools(mcp: FastMCP):
             "success": True,
             "task_id": task_id,
             "scheme_id": scheme_id,
+            "scheme_name": scheme.get("scheme_name", ""),
             "message": "预演指令已发送",
-            "command": "FUNC_UI_START_SIMULATION"
+            "command": "FUNC_UI_START_SIMULATION",
+            "scheme_details": scheme_details,
+            "reservoir_schemes": reservoir_schemes
         }
         logger.debug(f"send_simulation_command 返回结果: {return_value}")
         return return_value
