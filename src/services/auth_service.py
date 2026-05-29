@@ -96,7 +96,17 @@ class AuthService:
                 
                 return True
             else:
-                logger.error(f"登录失败: {result.get('msg', '未知错误')}")
+                msg = result.get('msg', '未知错误')
+                logger.error(f"登录失败: {msg}")
+                
+                # 如果服务器提示"5分钟内不允许再次认证"，说明token仍有效，保留旧token
+                if "5分钟内不允许再次认证" in msg and self._token:
+                    logger.info("服务器提示已认证，保留现有token继续使用")
+                    # 延长token过期时间
+                    self._token_expiry = time.time() + 5 * 60
+                    self._save_token_to_file()
+                    return True
+                    
                 return False
 
         except requests.exceptions.RequestException as e:

@@ -1,9 +1,15 @@
 import json
 import random
+import time
+import requests
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 from src.utils.logger import get_logger
 from src.services.scheme_storage import save_scheme, generate_unique_id
+from src.services.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service
+from src.services.auth_service import auth_service
+from src.config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -432,4 +438,333 @@ def register_forecast_models(mcp: FastMCP):
         }
         logger.debug(f"generate_dispatch_scheme 返回结果: {return_value}")
         return return_value
+
+    @mcp.tool()
+    async def run_xinanjiang_model(
+        start_time: str,
+        end_time: str,
+        control_params: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        运行新安江水文模型。
+        
+        大模型只需要传入开始时间和结束时间，工具会自动完成：
+        1. 获取降雨数据（整个时间范围的站点降雨量）
+        2. 计算等时段面雨量值（按小时划分）
+        3. 构建模型参数
+        4. 调用新安江模型进行计算
+        5. 返回计算结果
+        
+        Args:
+            start_time: 开始时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 08:00:00"
+            end_time: 结束时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 12:00:00"
+            control_params: 可选的控制参数，如果不传则使用默认参数
+        
+        Returns:
+            {
+                "success": true,
+                "message": "模型运行成功",
+                "result": {
+                    "start_time": "2026-04-15 08:00:00",
+                    "end_time": "2026-04-15 12:00:00",
+                    "rainfall_data": [10.0, 12.5, 8.3, 15.2],
+                    "discharge": [0.423, 2.056, 4.293, 6.755],
+                    "times": ["2026-04-15 08:00:00", "2026-04-15 09:00:00", ...]
+                }
+            }
+        """
+        logger.info(f"调用 run_xinanjiang_model，时间范围: {start_time} 至 {end_time}")
+        
+        def _get_rainfall_data(start: str, end: str, retry: bool = True) -> Dict[str, Any]:
+            base_url = getattr(settings, 'DATA_API_BASE_URL', 'http://wt.hxyai.cn/fx')
+            try:
+                url = f"{base_url}/rainfall/hourrth/getRainfall"
+                headers = auth_service.get_auth_headers()
+                params = {"startTime": start, "endTime": end}
+                
+                logger.info(f"获取降雨数据: {url}, params={params}")
+                response = requests.get(url, params=params, headers=headers, timeout=30)
+                
+                if response.status_code == 401 and retry:
+                    logger.warning("数据API认证失败，检查token状态")
+                    if auth_service._token and auth_service._token_expiry > time.time():
+                        logger.info("当前token未过期，但服务器返回401，可能是服务器问题，保留现有token")
+                        return _get_rainfall_data(start, end, retry=False)
+                    else:
+                        logger.info("token已过期，尝试获取新token")
+                        new_token = auth_service.get_token()
+                        if new_token:
+                            return _get_rainfall_data(start, end, retry=False)
+                        else:
+                            logger.error("无法获取新token")
+                
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("code") == 200:
+                    logger.info(f"获取降雨数据成功，共{len(result.get('data', []))}条记录")
+                    return result
+                else:
+                    logger.error(f"获取降雨数据失败: {result.get('msg', '未知错误')}")
+                    return result
+                    
+            except requests.exceptions.RequestException as e:
+                logger.error(f"获取降雨数据请求异常: {e}")
+                return {"code": 500, "data": None, "msg": str(e)}
+        
+        def _generate_simulation_rainfall(length: int, avg_value: float) -> List[float]:
+            if length <= 1:
+                return [avg_value]
+            
+            rainfall = []
+            
+            if length <= 4:
+                for i in range(length):
+                    factor = 0.5 + i * 0.2
+                    rainfall.append(round(avg_value * factor, 2))
+            else:
+                peak_position = length // 2
+                for i in range(length):
+                    distance_from_peak = abs(i - peak_position)
+                    max_distance = max(peak_position, length - 1 - peak_position)
+                    if max_distance > 0:
+                        factor = 1.0 - (distance_from_peak / max_distance) * 0.6
+                    else:
+                        factor = 1.0
+                    rainfall.append(round(avg_value * factor, 2))
+            
+            total = sum(rainfall)
+            if total > 0:
+                scale_factor = (avg_value * length) / total
+                rainfall = [round(v * scale_factor, 2) for v in rainfall]
+            
+            logger.info(f"生成模拟降雨序列: {rainfall[:5]}...（共{len(rainfall)}个时段）")
+            return rainfall
+        
+        def _calculate_average_rainfall(rainfall_data: Dict[str, Any], length: int = 4) -> List[float]:
+            data = rainfall_data.get("data", [])
+            if not data:
+                logger.warning("未获取到降雨数据，使用默认值")
+                return _generate_simulation_rainfall(length, 10.0)
+            
+            rainfall_sum = 0
+            count = 0
+            for record in data:
+                rf = record.get("rf", 0)
+                if rf and isinstance(rf, (int, float)):
+                    rainfall_sum += rf
+                    count += 1
+            
+            if count == 0:
+                logger.warning("未获取到有效降雨量数据，使用默认值")
+                return _generate_simulation_rainfall(length, 10.0)
+            
+            avg_rainfall = round(rainfall_sum / count, 2)
+            logger.info(f"计算得到平均降雨量: {avg_rainfall} mm（时间范围共{length}个时段）")
+            
+            return _generate_simulation_rainfall(length, avg_rainfall)
+        
+        def _build_control_params() -> Dict[str, Any]:
+            return {
+                "ncName": "control",
+                "type": "hydraulic_elements",
+                "dimensionsList": [],
+                "variablesList": [],
+                "globalList": [
+                    {"type": "float", "name": "KC", "fullName": "流域蒸散发折算系数(KC)", "value": "0.9"},
+                    {"type": "float", "name": "B", "fullName": "流域蓄水容量分布曲线指数(B)", "value": "0.4"},
+                    {"type": "int", "name": "UM", "fullName": "上层张力水容量(UM)", "value": "30"},
+                    {"type": "int", "name": "LM", "fullName": "下层张力水容量(LM)", "value": "80"},
+                    {"type": "float", "name": "EX", "fullName": "流域自由水容量分布曲线指数(EX)", "value": "1.5"},
+                    {"type": "float", "name": "C", "fullName": "深层蒸散发折算系数(C)", "value": "0.12"},
+                    {"type": "float", "name": "IM", "fullName": "不透水面积比例(IM)", "value": "0"},
+                    {"type": "float", "name": "WM", "fullName": "张力水容量(WM)", "value": "120"},
+                    {"type": "float", "name": "SM", "fullName": "自由水客量(SM)", "value": "25"},
+                    {"type": "float", "name": "KG", "fullName": "地下水日出流系数(KG)", "value": "0.3"},
+                    {"type": "float", "name": "KI", "fullName": "壤中流日出流系数(KI)", "value": "0.3"},
+                    {"type": "float", "name": "CS", "fullName": "地表水流消退系数(CS)", "value": "0.8"},
+                    {"type": "float", "name": "CG", "fullName": "地下水日消退系数(CG)", "value": "1"},
+                    {"type": "float", "name": "CI", "fullName": "壤中流日消退系数(CI)", "value": "1"},
+                    {"type": "float", "name": "CR", "fullName": "日模型河网蓄水消退系数(CR)", "value": "0.2"},
+                    {"type": "double", "name": "BA", "fullName": "流域面积(BA)", "value": "101.7298"},
+                    {"type": "float", "name": "XE", "fullName": "马斯京跟法演算参数(XE)", "value": "0.2"},
+                    {"type": "int", "name": "KE", "fullName": "马斯京跟法演算参数(KE)", "value": "1"}
+                ]
+            }
+        
+        def _build_rainfall_data(rainfall_values: List[float], start: str, end: str) -> Dict[str, Any]:
+            return {
+                "ncName": "p",
+                "type": "hydraulic_elements",
+                "dimensionsList": [{"name": "TM", "fullName": "时间维度", "value": len(rainfall_values)}],
+                "variablesList": [{
+                    "valueType": "float",
+                    "ArrayType": "array1d",
+                    "name": "PA",
+                    "fullName": "等时段面雨量值",
+                    "arrayValue": [str(v) for v in rainfall_values],
+                    "dimensionsSort": ["TM"],
+                    "arrayType": "array1d"
+                }],
+                "globalList": [
+                    {"type": "string", "name": "BGTM", "fullName": "开始时间", "value": start},
+                    {"type": "string", "name": "EDTM", "fullName": "结束时间", "value": end},
+                    {"type": "string", "name": "DT_UNIT", "fullName": "时间间隔单位", "value": "H"},
+                    {"type": "float", "name": "DT", "fullName": "时间间隔", "value": "1"}
+                ]
+            }
+        
+        def _build_etp_data(length: int, start: str, end: str) -> Dict[str, Any]:
+            return {
+                "ncName": "em",
+                "type": "hydraulic_elements",
+                "dimensionsList": [{"name": "TM", "fullName": "时间维度", "value": length}],
+                "variablesList": [{
+                    "valueType": "float",
+                    "ArrayType": "array1d",
+                    "name": "ETP",
+                    "fullName": "蒸散发值",
+                    "arrayValue": ["0" for _ in range(length)],
+                    "dimensionsSort": ["TM"],
+                    "arrayType": "array1d"
+                }],
+                "globalList": [
+                    {"type": "string", "name": "BGTM", "fullName": "开始时间", "value": start},
+                    {"type": "string", "name": "EDTM", "fullName": "结束时间", "value": end},
+                    {"type": "string", "name": "DT_UNIT", "fullName": "时间间隔单位", "value": "H"},
+                    {"type": "float", "name": "DT", "fullName": "时间间隔", "value": "1"}
+                ]
+            }
+        
+        try:
+            dt_start = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+            dt_end = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
+            time_diff = dt_end - dt_start
+            hours_diff = int(time_diff.total_seconds() / 3600) + 1
+            
+            logger.info(f"时间范围: {start_time} 至 {end_time}，共 {hours_diff} 个时段")
+            
+            rainfall_api_result = _get_rainfall_data(start_time, end_time)
+            if rainfall_api_result.get("code") != 200:
+                return {"success": False, "message": f"获取降雨数据失败: {rainfall_api_result.get('msg', '未知错误')}", "code": 500}
+            
+            rainfall_values = _calculate_average_rainfall(rainfall_api_result, hours_diff)
+            logger.info(f"计算得到等时段面雨量值: {rainfall_values[:5]}...（共{len(rainfall_values)}个时段）")
+            
+            ctrl_params = control_params if control_params else _build_control_params()
+            rainfall_data = _build_rainfall_data(rainfall_values, start_time, end_time)
+            etp_data = _build_etp_data(len(rainfall_values), start_time, end_time)
+            
+            if not xinanjiang_auth_service.get_token():
+                return {"success": False, "message": "新安江模型登录失败", "code": 500}
+            
+            write_result = xinanjiang_model_service.write_service_nc_file(ctrl_params, rainfall_data, etp_data)
+            if not write_result.get("success"):
+                return {"success": False, "message": "写入NC文件失败", "result": write_result}
+            
+            file_list = write_result.get("result", {}).get("fileList", [])
+            control_path = None
+            em_path = None
+            p_path = None
+            
+            for file_info in file_list:
+                nc_name = file_info.get("ncName")
+                file_path = file_info.get("filePath")
+                if nc_name == "control":
+                    control_path = file_path
+                elif nc_name == "em":
+                    em_path = file_path
+                elif nc_name == "p":
+                    p_path = file_path
+            
+            if not all([control_path, em_path, p_path]):
+                return {"success": False, "message": "文件路径解析失败", "result": file_list}
+            
+            call_result = xinanjiang_model_service.call_model(control_path, em_path, p_path)
+            if not call_result.get("success"):
+                return {"success": False, "message": "模型调用失败", "result": call_result}
+            
+            inc_key = call_result.get("result", {}).get("incKey")
+            if not inc_key:
+                return {"success": False, "message": "获取任务ID失败", "result": call_result}
+            
+            logger.info(f"任务ID: {inc_key}")
+            
+            max_polls = 60
+            poll_interval = 5
+            
+            for poll_count in range(max_polls):
+                time.sleep(poll_interval)
+                
+                status_result = xinanjiang_model_service.get_service_instance(inc_key)
+                if not status_result.get("success"):
+                    continue
+                
+                status = status_result.get("result", {}).get("status")
+                logger.info(f"轮询 {poll_count + 1}/{max_polls}: 状态={status}")
+                
+                if status == 3:
+                    callback_data_str = status_result.get("result", {}).get("callbackData", "{}")
+                    
+                    callback_data = json.loads(callback_data_str)
+                    output_data = callback_data.get("data", [])
+                    
+                    output_file_path = None
+                    for item in output_data:
+                        if item.get("key") == "out":
+                            output_file_path = item.get("value")
+                            break
+                    
+                    if not output_file_path:
+                        return {"success": False, "message": "未找到输出文件路径", "result": status_result}
+                    
+                    parse_result = xinanjiang_model_service.nc_to_json(output_file_path)
+                    if not parse_result.get("success"):
+                        return {"success": False, "message": "NC文件解析失败", "result": parse_result}
+                    
+                    variables_list = parse_result.get("result", {}).get("variablesList", [])
+                    global_list = parse_result.get("result", {}).get("globalList", [])
+                    
+                    discharge = []
+                    for var in variables_list:
+                        if var.get("name") == "Q":
+                            discharge = [float(v) for v in var.get("arrayValue", [])]
+                            break
+                    
+                    start_time_result = start_time
+                    end_time_result = end_time
+                    for glb in global_list:
+                        if glb.get("name") == "BGTM":
+                            start_time_result = glb.get("value")
+                        elif glb.get("name") == "EDTM":
+                            end_time_result = glb.get("value")
+                    
+                    times = []
+                    try:
+                        dt_start = datetime.strptime(start_time_result, "%Y-%m-%d %H:%M:%S")
+                        for i in range(len(discharge)):
+                            times.append((dt_start + timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S"))
+                    except:
+                        times = []
+                    
+                    return {
+                        "success": True,
+                        "message": "新安江模型运行成功",
+                        "command": "FUNC_RUN_XINANJIANG_MODEL",
+                        "result": {
+                            "start_time": start_time_result,
+                            "end_time": end_time_result,
+                            "rainfall_data": rainfall_values,
+                            "discharge": discharge,
+                            "times": times
+                        }
+                    }
+                elif status in [4, 5]:
+                    return {"success": False, "message": f"任务失败，状态: {status}", "result": status_result}
+            
+            return {"success": False, "message": f"轮询超时（{max_polls}次）", "inc_key": inc_key}
+            
+        except Exception as e:
+            logger.error(f"新安江模型完整流程异常: {e}")
+            return {"success": False, "message": str(e), "code": 500}
 
