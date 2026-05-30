@@ -12,7 +12,12 @@ mcp-servers/
 │   │   ├── config.yaml     # 水库配置
 │   │   └── settings.py     # 环境变量配置
 │   ├── services/
-│   │   └── scene_connector.py  # WebSocket场景连接器
+│   │   ├── scene_connector.py  # WebSocket场景连接器
+│   │   └── database/           # 数据库服务
+│   │       ├── connection.py   # 数据库连接管理
+│   │       ├── data_access.py  # 数据访问层
+│   │       ├── init_database.py # 数据库初始化
+│   │       └── config_loader.py # 动态配置加载器
 │   ├── tools/
 │   │   ├── ui_tools.py         # UI页面跳转工具
 │   │   ├── data_api_tools.py   # 数据API工具
@@ -25,8 +30,16 @@ mcp-servers/
 │       ├── logger.py
 │       ├── retry.py
 │       └── station_codes.py
+├── sql/                    # 数据库初始化脚本
+│   ├── 01_create_tables.sql
+│   ├── 02_seed_reservoirs.sql
+│   ├── 03_seed_water_levels.sql
+│   ├── 04_seed_simulation_params.sql
+│   ├── 05_seed_flood_plan.sql
+│   └── 06_seed_dispatch_schemes.sql
+├── storage/                # SQLite数据库文件
+├── data/                   # 原始数据文件（CSV/JSON）
 ├── templates/              # 预案模板
-├── data/                   # 站点数据
 ├── docker-compose.yml
 ├── Dockerfile
 ├── pyproject.toml
@@ -41,9 +54,12 @@ mcp-servers/
 # 安装依赖
 uv sync
 
-# 配置环境变量
+# 配置环境变量（可选）
 cp .env.example .env
 # 编辑 .env 文件，配置必要的参数
+
+# 初始化数据库（首次运行）
+make db-init
 
 # 启动MCP服务（stdio 模式，用于 Claude Desktop 等客户端）
 make start
@@ -51,7 +67,12 @@ make start
 uv run mcp-server
 
 # 启动MCP服务（HTTP 模式，用于 Web 应用）
+make start-http
+# 或
 uv run python -c "from src.server import run_server; run_server(transport='streamable-http')"
+
+# 测试数据库连接
+make db-test
 
 # 测试mcp服务
 npx @modelcontextprotocol/inspector
@@ -65,6 +86,43 @@ docker-compose up --build
 
 # 后台运行
 docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
+
+## 数据库说明
+
+### SQLite数据库
+
+系统使用SQLite作为数据存储，数据库文件位于 `storage/flood_control.db`。
+
+### 数据迁移
+
+所有数据已从 `data/` 目录迁移到数据库：
+
+| 数据源 | 目标表 | 记录数 |
+|--------|--------|--------|
+| 水库.csv | reservoirs | 27条 |
+| 水文站.csv | hydrology_stations | 288条 |
+| 雨量站.csv | rainfall_stations | 3598条 |
+| Flood_Control_Plan.json | flood_control_* | 207条 |
+| dispatch_scheme_data_base.json | dispatch_timeseries | 1632条 |
+
+### 数据库管理命令
+
+```bash
+# 初始化数据库（重建并导入所有seed数据）
+make db-init
+
+# 测试数据库连接和数据完整性
+make db-test
+
+# 查看数据库内容
+make db-shell
+
+# 清理数据库（删除数据库文件）
+make db-clean
 ```
 
 ## 环境变量
@@ -88,6 +146,9 @@ DATA_API_MOCK_ENABLED=true
 
 # 日志配置
 LOG_LEVEL=INFO
+
+# 数据库配置
+DATABASE_PATH=storage/flood_control.db
 ```
 
 ## 工具列表
@@ -106,6 +167,7 @@ LOG_LEVEL=INFO
 ### 预报工具 (forecast_models) - 2个
 - `run_hydrological_model` - 执行水文预报模型
 - `run_flood_routing_model` - 执行洪水演进模型
+- `generate_dispatch_scheme` - 生成五库联调调度方案
 
 ### 预警工具 (warning_tools) - 6个
 - `generate_water_level_warning` - 获取水库预警信息
@@ -175,10 +237,11 @@ LOG_LEVEL=INFO
 
 ```
 Agent ←→ MCP ←WebSocket→ UE-server ←→ UE场景
-           (长连接，同步等待返回)
+           ↓
+          SQLite数据库
 ```
 
-MCP服务通过WebSocket与UE服务通信，所有场景操作同步执行并等待UE返回结果。
+MCP服务通过WebSocket与UE服务通信，所有场景操作同步执行并等待UE返回结果。数据库存储水库、水文站、雨量站、调度方案等数据。
 
 ## 传输方式
 
@@ -200,42 +263,11 @@ MCP服务通过WebSocket与UE服务通信，所有场景操作同步执行并等
 # 安装依赖
 make install
 
-# 启动服务
+# 启动服务（stdio模式）
 make start
 
+# 启动服务（HTTP模式）
+make start-http
+
 # 代码格式化
-make format
-
-# 代码检查
-make lint
-
-# 清理缓存
-make clean
-```
-
-## 配置说明
-
-### 水库配置 (config.yaml)
-
-水库配置包含以下字段：
-- `id`: 水库唯一标识
-- `name`: 水库中文名称
-- `warning_level`: 预警水位
-- `flood_limit_level`: 汛限水位
-- `normal_level`: 正常水位
-- `camera_position`: 相机位置 [经度, 纬度, 高度]
-- `camera_rotation`: 相机旋转 [俯仰角, 偏航角, 翻滚角]
-- `gates`: 闸门配置（可选）
-
-### 支持的传输方式
-
-- `stdio`: 标准输入输出，适用于本地客户端
-- `streamable-http`: HTTP 流式传输，适用于 Web 应用
-
-## 依赖
-
-- Python >= 3.12
-- FastMCP >= 3.2.3
-- websocket-client >= 1.5.0
-- PyYAML >= 6.0.0
-- requests >= 2.31.0
+make

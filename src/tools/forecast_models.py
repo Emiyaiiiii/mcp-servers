@@ -177,15 +177,49 @@ def register_forecast_models(mcp: FastMCP):
         
         base_timestamp = int(base_datetime.timestamp() * 1000)
         
-        reservoir_config = {
-            "三门峡水库": {"base_level": 305, "base_storage": 60.0, "max_level": smx_max_level, "max_storage": smx_max_storage, "code": "BDA00000111"},
-            "小浪底水库": {"base_level": 235, "base_storage": 139.1, "max_level": xld_max_level, "max_storage": xld_max_storage, "code": "BDA00000121"},
-            "陆浑水库": {"base_level": 317, "base_storage": 5.68, "max_level": lh_max_level, "max_storage": lh_max_storage, "code": "BDA80200721"},
-            "故县水库": {"base_level": 527.3, "base_storage": 5.14, "max_level": gx_max_level, "max_storage": gx_max_storage, "code": "BDA80000661"},
-            "河口村水库": {"base_level": 238, "base_storage": 0.78, "max_level": hkc_max_level, "max_storage": hkc_max_storage, "code": "BDA00000761"}
-        }
+        from src.services.database.config_loader import load_reservoir_config, load_hydrology_stations
         
+        # 从数据库动态加载水库配置
+        db_reservoir_config = load_reservoir_config()
+        
+        # 构建水库配置，合并用户传入的约束
+        reservoir_config = {}
+        for res_name, db_config in db_reservoir_config.items():
+            # 动态获取约束参数
+            max_level_param = None
+            max_storage_param = None
+            
+            # 根据水库编码匹配约束参数
+            if db_config['code'] == "BDA00000111":
+                max_level_param = smx_max_level
+                max_storage_param = smx_max_storage
+            elif db_config['code'] == "BDA00000121":
+                max_level_param = xld_max_level
+                max_storage_param = xld_max_storage
+            elif db_config['code'] == "BDA80200721":
+                max_level_param = lh_max_level
+                max_storage_param = lh_max_storage
+            elif db_config['code'] == "BDA80000661":
+                max_level_param = gx_max_level
+                max_storage_param = gx_max_storage
+            elif db_config['code'] == "BDA00000761":
+                max_level_param = hkc_max_level
+                max_storage_param = hkc_max_storage
+            
+            reservoir_config[res_name] = {
+                "base_level": db_config.get('base_level') or 0,
+                "base_storage": db_config.get('base_storage') or 0,
+                "max_level": max_level_param,
+                "max_storage": max_storage_param,
+                "code": db_config['code']
+            }
+        
+        # 从数据库动态加载水文站列表
+        db_hydrology_config = load_hydrology_stations()
+        # 使用常用的水文站
         hydrological_stations = ["龙门镇", "白马寺", "黑石关", "花园口"]
+        # 过滤掉数据库中不存在的水文站
+        hydrological_stations = [s for s in hydrological_stations if s in db_hydrology_config]
         
         def apply_constraints(res_name, level, storage, outflow, inflow):
             config = reservoir_config[res_name]
@@ -208,58 +242,87 @@ def register_forecast_models(mcp: FastMCP):
             return adjusted_level, adjusted_storage, adjusted_outflow
         
         def load_base_data():
-            import json
-            import os
-            
-            data_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "dispatch_scheme_data_base.json")
+            from src.services.database.data_access import DispatchTimeseriesAccess
             
             try:
-                with open(data_path, 'r', encoding='utf-8') as f:
-                    raw_data = json.load(f)
+                # 从数据库获取调度方案数据
+                schemes = DispatchTimeseriesAccess.get_all_schemes()
+                if not schemes:
+                    logger.warning("数据库中没有找到调度方案数据")
+                    return None, None, None
                 
-                header_row = raw_data["data"][0]
-                unit_row = raw_data["data"][1]
-                data_rows = raw_data["data"][2:]
+                # 获取第一个方案的 ID
+                scheme_id = schemes[0]['id']
                 
-                reservoir_columns = {
-                    "三门峡水库": ["三门峡", "三门峡.1", "三门峡.2", "三门峡.3"],
-                    "小浪底水库": ["小浪底", "小浪底.1", "小浪底.2", "小浪底.3"],
-                    "陆浑水库": ["陆浑", "陆浑.1", "陆浑.2", "陆浑.3"],
-                    "故县水库": ["故县", "故县.1", "故县.2", "故县.3"],
-                    "河口村水库": ["河口村", "河口村.1", "河口村.2", "河口村.3"]
+                # 获取所有时间序列数据
+                timeseries_data = DispatchTimeseriesAccess.get_timeseries(scheme_id)
+                
+                if not timeseries_data:
+                    logger.warning(f"调度方案 {scheme_id} 中没有时间序列数据")
+                    return None, None, None
+                
+                # 按站点和指标类型组织数据
+                base_data = {
+                    "三门峡水库": {"water_level": [], "storage": [], "inflow": [], "outflow": []},
+                    "小浪底水库": {"water_level": [], "storage": [], "inflow": [], "outflow": []},
+                    "陆浑水库": {"water_level": [], "storage": [], "inflow": [], "outflow": []},
+                    "故县水库": {"water_level": [], "storage": [], "inflow": [], "outflow": []},
+                    "河口村水库": {"water_level": [], "storage": [], "inflow": [], "outflow": []}
                 }
-                
-                base_data = {res: {"water_level": [], "storage": [], "inflow": [], "outflow": []} for res in reservoir_columns}
                 station_data = {"龙门镇": [], "白马寺": [], "黑石关": [], "花园口": []}
                 timestamps = []
                 
-                for row in data_rows:
-                    time_str = row.get("时间", "")
-                    if time_str:
-                        timestamps.append(time_str)
+                # 站点名称映射
+                station_name_map = {
+                    "三门峡": "三门峡水库",
+                    "小浪底": "小浪底水库",
+                    "陆浑": "陆浑水库",
+                    "故县": "故县水库",
+                    "河口村": "河口村水库"
+                }
+                
+                # 指标类型映射
+                metric_type_map = {
+                    "level": "water_level",
+                    "storage": "storage",
+                    "inflow": "inflow",
+                    "outflow": "outflow",
+                    "flow": None  # 水文站使用
+                }
+                
+                # 按时间戳分组
+                time_groups = {}
+                for record in timeseries_data:
+                    ts = record['timestamp']
+                    if ts not in time_groups:
+                        time_groups[ts] = {}
+                    time_groups[ts][record['station_name']] = record
+                
+                # 按时间顺序处理
+                for ts in sorted(time_groups.keys()):
+                    timestamps.append(ts.strftime("%Y-%m-%d %H:%M:%S") if hasattr(ts, 'strftime') else str(ts))
+                    group = time_groups[ts]
                     
-                    for res_name, cols in reservoir_columns.items():
-                        try:
-                            base_data[res_name]["water_level"].append(float(row.get(cols[0], 0)))
-                            base_data[res_name]["storage"].append(float(row.get(cols[1], 0)))
-                            base_data[res_name]["inflow"].append(float(row.get(cols[2], 0)))
-                            base_data[res_name]["outflow"].append(float(row.get(cols[3], 0)))
-                        except (ValueError, TypeError):
-                            base_data[res_name]["water_level"].append(0)
-                            base_data[res_name]["storage"].append(0)
-                            base_data[res_name]["inflow"].append(0)
-                            base_data[res_name]["outflow"].append(0)
+                    # 处理水库数据
+                    for station_name, res_name in station_name_map.items():
+                        if station_name in group:
+                            record = group[station_name]
+                            metric = metric_type_map.get(record['metric_type'])
+                            if metric and metric in base_data[res_name]:
+                                base_data[res_name][metric].append(record['metric_value'] or 0)
+                        else:
+                            # 填充默认值
+                            for metric in base_data[res_name]:
+                                base_data[res_name][metric].append(0)
                     
-                    try:
-                        station_data["龙门镇"].append(float(row.get("龙门镇", 0)))
-                        station_data["白马寺"].append(float(row.get("白马寺", 0)))
-                        station_data["黑石关"].append(float(row.get("黑石关", 0)))
-                        station_data["花园口"].append(float(row.get("花园口", 0)))
-                    except (ValueError, TypeError):
-                        station_data["龙门镇"].append(0)
-                        station_data["白马寺"].append(0)
-                        station_data["黑石关"].append(0)
-                        station_data["花园口"].append(0)
+                    # 处理水文站数据
+                    for station in station_data.keys():
+                        if station in group:
+                            record = group[station]
+                            if record['metric_type'] == 'flow':
+                                station_data[station].append(record['metric_value'] or 0)
+                        else:
+                            station_data[station].append(0)
                 
                 return base_data, station_data, timestamps
             
@@ -284,9 +347,17 @@ def register_forecast_models(mcp: FastMCP):
                     base_level = config["base_level"]
                     base_storage = config["base_storage"]
                     
-                    data_index = hour % len(base_data[res_name]["water_level"]) if base_data else hour
+                    # 检查base_data是否有有效数据
+                    has_valid_data = (
+                        base_data is not None and 
+                        res_name in base_data and 
+                        "water_level" in base_data[res_name] and 
+                        len(base_data[res_name]["water_level"]) > 0
+                    )
                     
-                    if base_data and data_index < len(base_data[res_name]["water_level"]):
+                    if has_valid_data:
+                        data_len = len(base_data[res_name]["water_level"])
+                        data_index = hour % data_len
                         ref_level = base_data[res_name]["water_level"][data_index]
                         ref_storage = base_data[res_name]["storage"][data_index]
                         ref_inflow = base_data[res_name]["inflow"][data_index]
