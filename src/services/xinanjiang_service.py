@@ -3,11 +3,13 @@ import time
 import threading
 import json
 import os
+from pathlib import Path
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
-load_dotenv()
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 logger = get_logger(__name__)
 
 
@@ -146,7 +148,7 @@ class XinanjiangModelService:
     """新安江模型服务"""
     
     def __init__(self):
-        self._base_url = "http://gateway.yrihr.com"
+        self._base_url = os.getenv('XINANJIANG_API_BASE_URL', 'http://gateway.yrihr.com')
         self._session = requests.Session()
     
     def write_service_nc_file(self, control_params: Dict[str, Any], rainfall_data: Dict[str, Any], etp_data: Dict[str, Any]) -> Dict[str, Any]:

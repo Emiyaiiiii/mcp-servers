@@ -12,7 +12,9 @@ from src.services.database.data_access import (
 
 logger = get_logger(__name__)
 
-KNOWLEDGE_BASE_API_URL = "http://10.4.158.35:9621/query/data"
+from src.config.settings import settings
+
+KNOWLEDGE_BASE_API_URL = settings.KNOWLEDGE_BASE_API_URL
 
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 
