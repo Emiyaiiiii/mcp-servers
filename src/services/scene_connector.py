@@ -236,6 +236,57 @@ class SceneConnector:
             "scenes": []
         }
 
+    async def send_warning_highlight_async(
+        self,
+        markers: list,
+        target_session: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """发送告警高亮指令（异步版本）
+        
+        Args:
+            markers: 告警标记列表，每个元素包含:
+                - id: 站点ID（reservoir_code 或 station_code）
+                - name: 站点名称
+                - type: "reservoir" 或 "station"
+                - warning_type: "water_level" 或 "flow"
+                - current_value: 当前值
+                - threshold: 阈值
+                - level: 告警等级 "red" | "orange" | "yellow"
+            target_session: 目标 session_id，如果为 None 则广播到所有连接
+        """
+        command = {
+            "cmd": "lshh",
+            "function": "FUNC_WARNING_HIGHLIGHT",
+            "target": "scene",
+            "data": {
+                "markers": markers,
+                "action": "show"
+            }
+        }
+        return await self.send_command_async(command, target_session=target_session)
+
+    async def clear_warning_highlight_async(
+        self,
+        marker_ids: list = None,
+        target_session: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """清除告警高亮（异步版本）
+        
+        Args:
+            marker_ids: 要清除的标记ID列表，None表示清除全部
+            target_session: 目标 session_id，如果为 None 则广播到所有连接
+        """
+        command = {
+            "cmd": "lshh",
+            "function": "FUNC_WARNING_HIGHLIGHT",
+            "target": "scene",
+            "data": {
+                "action": "clear",
+                "marker_ids": marker_ids
+            }
+        }
+        return await self.send_command_async(command, target_session=target_session)
+
     # ========== 兼容同步方法的包装 ==========
     # 为了保持向后兼容，我们保留这些同步方法
     # 但它们内部会调用异步方法（需要在同步环境中谨慎使用）

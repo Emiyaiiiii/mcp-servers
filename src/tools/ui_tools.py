@@ -740,3 +740,78 @@ def register_ui_tools(mcp: FastMCP):
         }
         logger.debug(f"send_plan_document_url 返回结果: {return_value}")
         return return_value
+
+    @mcp.tool()
+    async def highlight_warnings(
+        markers: list,
+        session_id: str = None
+    ) -> dict:
+        """在GIS场景中高亮显示告警站点。
+
+        当水位或流量超警时，调用此工具在GIS场景中以醒目颜色高亮对应水库或水文站站点，
+        便于决策者直观判断当前险情分布。
+
+        Args:
+            markers: 告警标记列表，每项为一个 dict：
+                {
+                    "id": "BDA00000761",        // 站点编码（水库编码或水文站码）
+                    "name": "河口村水库",        // 站点名称
+                    "type": "reservoir",        // 类型：reservoir（水库）或 station（水文站）
+                    "warning_type": "water_level", // 告警类型：water_level（水位）或 flow（流量）
+                    "current_value": 287.5,     // 当前值（水位：米；流量：m³/s）
+                    "threshold": 285.43,        // 阈值（水位：汛限/校核水位；流量：预警流量）
+                    "level": "red"              // 告警级别：red（红色/超校核）、orange（橙色/超汛限）、yellow（黄色/超预警）
+                }
+                如果当前无任何告警，传入空列表 []，场景中将清除所有告警高亮。
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送高亮指令的确认信息
+        """
+        logger.info(f"调用 highlight_warnings，收到参数: markers={len(markers)} 个, session_id={repr(session_id)}")
+        result = await scene_connector.send_warning_highlight_async(markers, target_session=session_id)
+        warning_count = len(markers)
+        red_count = sum(1 for m in markers if m.get("level") == "red")
+        orange_count = sum(1 for m in markers if m.get("level") == "orange")
+        yellow_count = sum(1 for m in markers if m.get("level") == "yellow")
+        return_value = {
+            "success": True,
+            "marker_count": warning_count,
+            "breakdown": {
+                "red": red_count,
+                "orange": orange_count,
+                "yellow": yellow_count
+            },
+            "message": f"GIS告警高亮已更新：{warning_count} 个站点（红色{red_count}、橙色{orange_count}、黄色{yellow_count}）",
+            "command": "FUNC_WARNING_HIGHLIGHT",
+            "response": result
+        }
+        logger.debug(f"highlight_warnings 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool()
+    async def clear_warning_highlights(
+        marker_ids: list = None,
+        session_id: str = None
+    ) -> dict:
+        """清除GIS场景中的告警高亮。
+
+        Args:
+            marker_ids: 要清除的站点编码列表，如 ["BDA00000761", "40104360"]，
+                为空或 None 时清除全部告警高亮
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送清除指令的确认信息
+        """
+        logger.info(f"调用 clear_warning_highlights，收到参数: marker_ids={repr(marker_ids)}, session_id={repr(session_id)}")
+        result = await scene_connector.clear_warning_highlight_async(marker_ids, target_session=session_id)
+        return_value = {
+            "success": True,
+            "cleared_ids": marker_ids,
+            "message": f"已清除告警高亮（{'全部' if not marker_ids else f'{len(marker_ids)}个'}）",
+            "command": "FUNC_WARNING_HIGHLIGHT",
+            "response": result
+        }
+        logger.debug(f"clear_warning_highlights 返回结果: {return_value}")
+        return return_value

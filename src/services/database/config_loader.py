@@ -61,6 +61,7 @@ def load_reservoir_config() -> Dict[str, dict]:
                 'base_storage': res.get('capacity_total'),
                 'max_level': res.get('level_flood_max'),
                 'max_storage': res.get('capacity_total'),
+                'level_flood_check': res.get('level_flood_check'),
                 'river': res.get('river'),
                 'location': res.get('location')
             }

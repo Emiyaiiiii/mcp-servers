@@ -211,6 +211,7 @@ def register_forecast_models(mcp: FastMCP):
                 "base_storage": db_config.get('base_storage') or 0,
                 "max_level": max_level_param,
                 "max_storage": max_storage_param,
+                "level_flood_check": db_config.get('level_flood_check'),
                 "code": db_config['code']
             }
         
@@ -225,6 +226,7 @@ def register_forecast_models(mcp: FastMCP):
             config = reservoir_config[res_name]
             max_level = config["max_level"]
             max_storage = config["max_storage"]
+            level_flood_check = config["level_flood_check"]
             
             adjusted_level = level
             adjusted_storage = storage
@@ -238,6 +240,11 @@ def register_forecast_models(mcp: FastMCP):
                 adjusted_storage = round(max_storage + random.uniform(-10, 0), 4)
                 excess_storage = storage - max_storage
                 adjusted_outflow = round(outflow + excess_storage * 10, 4)
+            
+            if level_flood_check is not None and adjusted_level > level_flood_check:
+                adjusted_level = round(level_flood_check - 0.1, 4)
+                adjusted_outflow = round(outflow * 1.5, 4)
+                logger.warning(f"水库 {res_name} 水位 {level}m 超过校核洪水位 {level_flood_check}m，已强制调整为 {adjusted_level}m")
             
             return adjusted_level, adjusted_storage, adjusted_outflow
         
@@ -505,7 +512,7 @@ def register_forecast_models(mcp: FastMCP):
                 }
             },
             "schemes_summary": schemes_summary,
-            "message": f"成功生成{len(schemes)}个调度方案单"
+            "message": f"成功生成{len(schemes)}个调度方案单，**因为当前没有五库联调模型，所以当前生成的调度方案数据仅供参考。**"
         }
         logger.debug(f"generate_dispatch_scheme 返回结果: {return_value}")
         return return_value

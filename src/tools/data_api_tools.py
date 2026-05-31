@@ -1427,3 +1427,177 @@ def register_data_api_tools(mcp: FastMCP):
             result = f"Error: {str(e)}".encode()
             logger.error(f"download_image 错误: {str(e)}")
             return result
+
+    @mcp.tool()
+    async def query_flood_plan(
+        keyword: str,
+        category: str = "all"
+    ) -> Dict[str, Any]:
+        """
+        综合查询防洪预案数据。整合转移计划、物资保障、人员保障、联系电话、联系人等信息。
+
+        Args:
+            keyword: 搜索关键词，水库名称、村庄名或任意关键词（支持模糊匹配）
+            category: 数据类别，可选值：
+                - "all"（默认）：搜索所有类别
+                - "evacuation_plan"：洪水转移计划
+                - "materials"：防汛物资保障
+                - "personnel"：水库人员保障
+                - "contact_phones"：防汛联系电话
+                - "contacts"：防汛联系人
+
+        Returns:
+            {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "evacuation_plan": [...],   // 存在时返回
+                    "materials": [...],         // 存在时返回
+                    "personnel": [...],         // 存在时返回
+                    "contact_phones": [...],   // 存在时返回
+                    "contacts": [...]           // 存在时返回
+                }
+            }
+        """
+        logger.info(f"query_flood_plan: keyword={keyword!r}, category={category!r}")
+        from src.services.database.data_access import (
+            ReservoirAccess,
+            FloodEvacuationPlanAccess,
+            FloodControlMaterialAccess,
+            FloodReservoirStaffAccess,
+            FloodContactPhoneAccess,
+            FloodControlContactAccess
+        )
+
+        reservoir = ReservoirAccess.get_by_name(keyword)
+        code = reservoir['code'] if reservoir else keyword
+
+        CATEGORIES = {
+            "all": [
+                ("evacuation_plan", FloodEvacuationPlanAccess, "search_by_reservoir_or_region"),
+                ("materials", FloodControlMaterialAccess, "get_by_reservoir_code" if reservoir else "search"),
+                ("personnel", FloodReservoirStaffAccess, "get_by_reservoir_code" if reservoir else "search"),
+                ("contact_phones", FloodContactPhoneAccess, "get_by_reservoir_code" if reservoir else "search"),
+                ("contacts", FloodControlContactAccess, "get_by_reservoir_code" if reservoir else "search"),
+            ],
+            "evacuation_plan": [("evacuation_plan", FloodEvacuationPlanAccess, "search_by_reservoir_or_region")],
+            "materials": [("materials", FloodControlMaterialAccess, "get_by_reservoir_code" if reservoir else "search")],
+            "personnel": [("personnel", FloodReservoirStaffAccess, "get_by_reservoir_code" if reservoir else "search")],
+            "contact_phones": [("contact_phones", FloodContactPhoneAccess, "get_by_reservoir_code" if reservoir else "search")],
+            "contacts": [("contacts", FloodControlContactAccess, "get_by_reservoir_code" if reservoir else "search")],
+        }
+
+        if category not in CATEGORIES:
+            return {"code": 400, "msg": f"未知类别: {category}，可选: all/evacuation_plan/materials/personnel/contact_phones/contacts", "data": {}}
+
+        data = {}
+        for name, AccessCls, method_name in CATEGORIES[category]:
+            accessor = AccessCls()
+            method = getattr(accessor, method_name)
+            result = method(code) if reservoir else method(keyword)
+            if result:
+                data[name] = result
+
+        if not data:
+            return {"code": 404, "msg": f"未找到与 '{keyword}' 相关的数据", "data": {}}
+        logger.debug(f"query_flood_plan 返回: {list(data.keys())}")
+        return {"code": 200, "msg": "success", "data": data}
+
+    @mcp.tool()
+    async def query_evacuation(
+        reservoir_name: str = None,
+        village: str = None,
+        water_level: float = None,
+        township: str = None
+    ) -> Dict[str, Any]:
+        """
+        查询撤离转移信息。通过水库名、村庄名、水位、乡镇多维检索。
+
+        Args:
+            reservoir_name: 水库名称，必填其一。如"河口村水库"、"故县水库"、"陆浑水库"
+            village: 村庄名称，可选（支持模糊）。如"北窑村"
+            water_level: 水位值（米），可选。如 331.8
+            township: 乡镇名称，可选。如"陆浑镇"
+
+        Returns:
+            {
+                "code": 200,
+                "msg": "success",
+                "data": [
+                    {
+                        "reservoir_name": "故县水库",
+                        "water_level": 533.64,
+                        "township_name": "故县镇",
+                        "village_name": "北窑村",
+                        "contact_name": "宋洛生",
+                        "contact_phone": "18625797490",
+                        "evacuation_location": "党群服务中心",
+                        "evacuation_route": "通村公路"
+                    }
+                ]
+            }
+        """
+        logger.info(f"query_evacuation: reservoir={reservoir_name}, village={village}, level={water_level}, township={township}")
+        from src.services.database.data_access import EvacuationQueryAccess
+
+        if village:
+            data = EvacuationQueryAccess.search_village(village)
+        elif reservoir_name:
+            data = EvacuationQueryAccess.get_by_reservoir(reservoir_name, township, water_level, village)
+        else:
+            return {"code": 400, "msg": "reservoir_name 或 village 至少填一个", "data": []}
+
+        code = 200 if data else 404
+        msg = "success" if data else f"未找到撤离信息"
+        logger.debug(f"返回 {len(data) if data else 0} 条")
+        return {"code": code, "msg": msg, "data": data}
+
+    @mcp.tool()
+    async def query_reservoir_info(
+        reservoir_name: str = None,
+        water_level: float = None
+    ) -> Dict[str, Any]:
+        """
+        查询水库的水位阈值及乡镇信息。
+
+        Args:
+            reservoir_name: 水库名称，如"陆浑水库"
+            water_level: 水位值（米），可选。不指定则返回所有水位阈值
+
+        Returns:
+            {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "reservoir_name": "陆浑水库",
+                    "water_levels": [
+                        {"water_level": 321.5, "township_count": 2, "village_count": 24, "level_description": "..."},
+                        {"water_level": 331.8, "township_count": 3, "village_count": 53, "level_description": "..."}
+                    ],
+                    "townships": [
+                        {"township_name": "陆浑镇", "village_count": 100},
+                        {"township_name": "饭坡镇", "village_count": 37}
+                    ]
+                }
+            }
+        """
+        logger.info(f"query_reservoir_info: {reservoir_name}, level={water_level}")
+        from src.services.database.data_access import EvacuationQueryAccess, ReservoirAccess
+
+        if not reservoir_name:
+            return {"code": 400, "msg": "reservoir_name 必填", "data": {}}
+        reservoir = ReservoirAccess.get_by_name(reservoir_name)
+        if not reservoir:
+            return {"code": 404, "msg": f"未找到水库: {reservoir_name}", "data": {}}
+
+        water_levels = EvacuationQueryAccess.get_water_levels(reservoir_name, water_level)
+        townships = EvacuationQueryAccess.get_townships(reservoir_name, water_level)
+        return {
+            "code": 200,
+            "msg": "success",
+            "data": {
+                "reservoir_name": reservoir['name'],
+                "water_levels": water_levels,
+                "townships": townships
+            }
+        }

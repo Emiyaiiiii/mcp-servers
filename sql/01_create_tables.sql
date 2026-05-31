@@ -408,34 +408,173 @@ CREATE TABLE IF NOT EXISTS flood_reservoir_staff (
 
 CREATE INDEX IF NOT EXISTS idx_flood_reservoir_staff ON flood_reservoir_staff(reservoir_code);
 
--- 淹没损失统计表
-CREATE TABLE IF NOT EXISTS flood_inundation_stats (
+-- 淹没区撤离信息表（规范化设计，支持水库→水位→乡镇→村庄层级查询）
+
+-- 水位阈值表
+CREATE TABLE IF NOT EXISTS water_level_thresholds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    reservoir_code VARCHAR(50),
-    level_range VARCHAR(100) NOT NULL,
+    reservoir_code VARCHAR(50) NOT NULL,
+    water_level DECIMAL(10,2) NOT NULL,
+    level_description VARCHAR(200),
+    level_category VARCHAR(50),
+    sheet_name VARCHAR(200),
+    township_count INTEGER DEFAULT 0,
+    village_count INTEGER DEFAULT 0,
+    evacuation_count INTEGER DEFAULT 0,
+    impact_area TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(reservoir_code, water_level)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wlt_reservoir ON water_level_thresholds(reservoir_code);
+CREATE INDEX IF NOT EXISTS idx_wlt_water_level ON water_level_thresholds(water_level);
+CREATE INDEX IF NOT EXISTS idx_wlt_reservoir_level ON water_level_thresholds(reservoir_code, water_level);
+
+-- 乡镇表
+CREATE TABLE IF NOT EXISTS townships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reservoir_code VARCHAR(50) NOT NULL,
+    water_level_id INTEGER NOT NULL,
+    township_name VARCHAR(100) NOT NULL,
     township_leader VARCHAR(100),
-    village VARCHAR(100),
+    leader_phone VARCHAR(50),
+    village_count INTEGER DEFAULT 0,
+    evacuation_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reservoir_code) REFERENCES reservoirs(code) ON DELETE CASCADE,
+    FOREIGN KEY (water_level_id) REFERENCES water_level_thresholds(id) ON DELETE CASCADE,
+    UNIQUE(reservoir_code, water_level_id, township_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_township_reservoir ON townships(reservoir_code);
+CREATE INDEX IF NOT EXISTS idx_township_water_level ON townships(water_level_id);
+CREATE INDEX IF NOT EXISTS idx_township_name ON townships(township_name);
+
+-- 村庄表
+CREATE TABLE IF NOT EXISTS villages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    township_id INTEGER NOT NULL,
+    village_name VARCHAR(100) NOT NULL,
+    household_count INTEGER DEFAULT 0,
+    permanent_residents INTEGER DEFAULT 0,
+    temporary_staff INTEGER DEFAULT 0,
+    house_count INTEGER DEFAULT 0,
+    cave_count INTEGER DEFAULT 0,
+    farmland_area DECIMAL(15,2) DEFAULT 0,
+    forest_area DECIMAL(15,2) DEFAULT 0,
+    orchard_area DECIMAL(15,2) DEFAULT 0,
+    well_count INTEGER DEFAULT 0,
+    pump_count INTEGER DEFAULT 0,
+    longitude DECIMAL(10,6),
+    latitude DECIMAL(10,6),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (township_id) REFERENCES townships(id) ON DELETE CASCADE,
+    UNIQUE(township_id, village_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_village_township ON villages(township_id);
+CREATE INDEX IF NOT EXISTS idx_village_name ON villages(village_name);
+
+-- 撤离详情表
+CREATE TABLE IF NOT EXISTS evacuation_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    village_id INTEGER NOT NULL,
     contact_name VARCHAR(100),
     contact_title VARCHAR(100),
     contact_phone VARCHAR(50),
     evacuation_location VARCHAR(200),
     evacuation_route VARCHAR(200),
-    household_count INTEGER,
-    permanent_residents INTEGER,
-    temporary_staff INTEGER,
-    house_count INTEGER,
-    cave_count INTEGER,
-    farmland_area DECIMAL(15,2),
-    forest_area DECIMAL(15,2),
-    orchard_area DECIMAL(15,2),
-    well_count INTEGER,
-    pump_count INTEGER,
+    evacuation_method VARCHAR(100),
+    evacuation_time_warning VARCHAR(100),
+    evacuation_time_flood VARCHAR(100),
+    vulnerable_groups TEXT,
+    assistance_needed TEXT,
+    required_materials TEXT,
+    material_quantity VARCHAR(200),
+    region VARCHAR(100),
+    department VARCHAR(200),
+    responsibility TEXT,
+    discharge_range VARCHAR(100),
+    flow_rate DECIMAL(10,4),
+    resettlement_person VARCHAR(100),
+    resettlement_phone VARCHAR(50),
+    transfer_person VARCHAR(100),
+    transfer_person_phone VARCHAR(50),
+    remark TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (village_id) REFERENCES villages(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_flood_inundation_reservoir ON flood_inundation_stats(reservoir_code);
-CREATE INDEX IF NOT EXISTS idx_flood_inundation_level ON flood_inundation_stats(level_range);
+CREATE INDEX IF NOT EXISTS idx_evacuation_village ON evacuation_details(village_id);
+CREATE INDEX IF NOT EXISTS idx_evacuation_location ON evacuation_details(evacuation_location);
+CREATE INDEX IF NOT EXISTS idx_evacuation_route ON evacuation_details(evacuation_route);
+CREATE INDEX IF NOT EXISTS idx_evacuation_contact_phone ON evacuation_details(contact_phone);
+
+-- 完整撤离信息视图
+CREATE VIEW IF NOT EXISTS v_evacuation_complete AS
+SELECT 
+    r.name AS reservoir_name,
+    r.code AS reservoir_code,
+    w.water_level,
+    w.level_description,
+    t.township_name,
+    v.village_name,
+    v.household_count,
+    v.permanent_residents,
+    v.temporary_staff,
+    e.contact_name,
+    e.contact_title,
+    e.contact_phone,
+    e.evacuation_location,
+    e.evacuation_route,
+    e.evacuation_method,
+    e.discharge_range,
+    e.flow_rate,
+    e.transfer_person,
+    e.transfer_person_phone,
+    e.resettlement_person,
+    e.resettlement_phone,
+    e.region,
+    e.department,
+    e.responsibility,
+    e.remark
+FROM reservoirs r
+LEFT JOIN water_level_thresholds w ON r.code = w.reservoir_code
+LEFT JOIN townships t ON w.id = t.water_level_id
+LEFT JOIN villages v ON t.id = v.township_id
+LEFT JOIN evacuation_details e ON v.id = e.village_id;
+
+-- 水库统计视图
+CREATE VIEW IF NOT EXISTS v_stats_by_reservoir AS
+SELECT 
+    r.name AS reservoir_name,
+    r.code AS reservoir_code,
+    COUNT(DISTINCT w.id) AS water_level_count,
+    COUNT(DISTINCT t.id) AS township_count,
+    COUNT(DISTINCT v.id) AS village_count,
+    SUM(COALESCE(v.permanent_residents, 0) + COALESCE(v.temporary_staff, 0)) AS total_evacuation_count
+FROM reservoirs r
+LEFT JOIN water_level_thresholds w ON r.code = w.reservoir_code
+LEFT JOIN townships t ON w.id = t.water_level_id
+LEFT JOIN villages v ON t.id = v.township_id
+GROUP BY r.name, r.code;
+
+-- 水位-乡镇统计视图
+CREATE VIEW IF NOT EXISTS v_stats_by_reservoir_level AS
+SELECT 
+    r.name AS reservoir_name,
+    r.code AS reservoir_code,
+    w.water_level,
+    t.township_name,
+    COUNT(DISTINCT v.id) AS village_count,
+    SUM(COALESCE(v.household_count, 0)) AS total_households,
+    SUM(COALESCE(v.permanent_residents, 0) + COALESCE(v.temporary_staff, 0)) AS total_evacuation_count
+FROM reservoirs r
+LEFT JOIN water_level_thresholds w ON r.code = w.reservoir_code
+LEFT JOIN townships t ON w.id = t.water_level_id
+LEFT JOIN villages v ON t.id = v.township_id
+GROUP BY r.name, r.code, w.water_level, t.township_name;
 
 -- 常用联系电话表
 CREATE TABLE IF NOT EXISTS flood_contact_phones (

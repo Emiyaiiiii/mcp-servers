@@ -35,7 +35,9 @@ INSERT INTO reservoirs (code, station_code, name, name_alias, river, location, c
 ('BDD12000011', NULL, '禹门河水库', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
 ('BDD12000012', NULL, '青沟水库', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
 ('BDD12000013', NULL, '麻家砭水库', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('BDD12000014', NULL, '西段村水库', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+('BDD12000014', NULL, '西段村水库', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('BDD12000015', NULL, '花果山水库', '["花果山", "HGS"]', '泾河', '甘肃省庆阳市西峰区', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '["防洪"]', NULL, NULL, NULL, NULL),
+('BDA40001001', NULL, '伊洛河段', '["伊洛河段", "伊洛河", "YILOHE"]', '伊洛河', '河南省洛阳市至郑州市巩义段', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '["防洪"]', NULL, '故县/陆浑', '黑石关', '伊洛河段防洪预案数据');
 
 -- ============================================
 -- 2. 水文站数据 (289条)

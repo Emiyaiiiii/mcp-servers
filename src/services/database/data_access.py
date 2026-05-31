@@ -782,3 +782,400 @@ class DispatchTimeseriesAccess:
         )
         logger.info(f"调度方案 {scheme_id} 及其时间序列已删除")
         return rows
+
+
+class FloodEvacuationPlanAccess:
+    """洪水转移计划数据访问"""
+    
+    @staticmethod
+    def get_by_reservoir_code(reservoir_code: str) -> List[Dict]:
+        """根据水库编码获取转移计划"""
+        sql = """
+            SELECT * FROM flood_evacuation_plans 
+            WHERE reservoir_code = ?
+            ORDER BY region, discharge_range
+        """
+        return get_db().execute_query(sql, (reservoir_code,))
+    
+    @staticmethod
+    def get_by_region(region: str) -> List[Dict]:
+        """根据区域名称获取转移计划（支持模糊匹配）"""
+        sql = """
+            SELECT * FROM flood_evacuation_plans 
+            WHERE region LIKE ?
+            ORDER BY reservoir_code, discharge_range
+        """
+        like_pattern = f"%{region}%"
+        return get_db().execute_query(sql, (like_pattern,))
+    
+    @staticmethod
+    def get_all() -> List[Dict]:
+        """获取所有转移计划"""
+        sql = "SELECT * FROM flood_evacuation_plans ORDER BY reservoir_code, region"
+        return get_db().execute_query(sql)
+    
+    @staticmethod
+    def search_by_reservoir_or_region(keyword: str) -> List[Dict]:
+        """根据水库编码或区域名称搜索转移计划"""
+        # 首先尝试作为水库编码精确匹配
+        sql = """
+            SELECT * FROM flood_evacuation_plans 
+            WHERE reservoir_code = ? OR region LIKE ?
+            ORDER BY reservoir_code, region
+        """
+        like_pattern = f"%{keyword}%"
+        results = get_db().execute_query(sql, (keyword, like_pattern))
+        
+        # 如果没有结果，尝试模糊匹配水库编码
+        if not results:
+            sql = """
+                SELECT * FROM flood_evacuation_plans 
+                WHERE reservoir_code LIKE ? OR region LIKE ?
+                ORDER BY reservoir_code, region
+            """
+            code_pattern = f"%{keyword}%"
+            results = get_db().execute_query(sql, (code_pattern, like_pattern))
+        
+        return results
+
+
+class FloodControlMaterialAccess:
+    """防汛物资数据访问"""
+    
+    @staticmethod
+    def get_by_reservoir_code(reservoir_code: str) -> List[Dict]:
+        """根据水库编码获取防汛物资"""
+        sql = """
+            SELECT * FROM flood_control_materials 
+            WHERE reservoir_code = ? OR reservoir_code IS NULL
+            ORDER BY plan_category, material_name
+        """
+        return get_db().execute_query(sql, (reservoir_code,))
+    
+    @staticmethod
+    def get_by_category(category: str) -> List[Dict]:
+        """根据物资类别获取防汛物资"""
+        sql = """
+            SELECT * FROM flood_control_materials 
+            WHERE plan_category LIKE ?
+            ORDER BY material_name
+        """
+        like_pattern = f"%{category}%"
+        return get_db().execute_query(sql, (like_pattern,))
+    
+    @staticmethod
+    def get_all() -> List[Dict]:
+        """获取所有防汛物资"""
+        sql = "SELECT * FROM flood_control_materials ORDER BY plan_category, material_name"
+        return get_db().execute_query(sql)
+    
+    @staticmethod
+    def search(keyword: str) -> List[Dict]:
+        """根据物资名称或类别搜索"""
+        sql = """
+            SELECT * FROM flood_control_materials 
+            WHERE material_name LIKE ? OR plan_category LIKE ? OR keeper LIKE ?
+            ORDER BY plan_category, material_name
+        """
+        like_pattern = f"%{keyword}%"
+        return get_db().execute_query(sql, (like_pattern, like_pattern, like_pattern))
+
+
+class FloodReservoirStaffAccess:
+    """水库人员数据访问"""
+    
+    @staticmethod
+    def get_by_reservoir_code(reservoir_code: str) -> List[Dict]:
+        """根据水库编码获取水库人员"""
+        sql = """
+            SELECT * FROM flood_reservoir_staff 
+            WHERE reservoir_code = ?
+            ORDER BY staff_type, name
+        """
+        return get_db().execute_query(sql, (reservoir_code,))
+    
+    @staticmethod
+    def get_by_staff_type(staff_type: str) -> List[Dict]:
+        """根据人员类型获取水库人员"""
+        sql = """
+            SELECT * FROM flood_reservoir_staff 
+            WHERE staff_type = ?
+            ORDER BY reservoir_code, name
+        """
+        return get_db().execute_query(sql, (staff_type,))
+    
+    @staticmethod
+    def get_all() -> List[Dict]:
+        """获取所有水库人员"""
+        sql = "SELECT * FROM flood_reservoir_staff ORDER BY reservoir_code, staff_type, name"
+        return get_db().execute_query(sql)
+    
+    @staticmethod
+    def search(keyword: str) -> List[Dict]:
+        """根据姓名、住所或转移地点搜索"""
+        sql = """
+            SELECT * FROM flood_reservoir_staff 
+            WHERE name LIKE ? OR residence LIKE ? OR transfer_location LIKE ? OR transfer_contact LIKE ?
+            ORDER BY reservoir_code, name
+        """
+        like_pattern = f"%{keyword}%"
+        return get_db().execute_query(sql, (like_pattern, like_pattern, like_pattern, like_pattern))
+
+
+class EvacuationQueryAccess:
+    """新表结构的撤离信息查询"""
+
+    @staticmethod
+    def get_by_reservoir(reservoir_name: str, township: str = None,
+                         water_level: float = None, village: str = None) -> List[Dict]:
+        """按水库名查询撤离信息，支持乡镇/水位/村庄过滤"""
+        conditions = ["r.name = ?"]
+        params = [reservoir_name]
+
+        if township:
+            conditions.append("t.township_name = ?")
+            params.append(township)
+        if water_level is not None:
+            conditions.append("ABS(w.water_level - ?) < 0.01")
+            params.append(water_level)
+        if village:
+            conditions.append("v.village_name LIKE ?")
+            params.append(f"%{village}%")
+
+        sql = f"""
+            SELECT r.name AS reservoir_name, r.code AS reservoir_code,
+                   w.water_level, w.level_description,
+                   t.township_name, v.village_name,
+                   e.contact_name, e.contact_title, e.contact_phone,
+                   e.evacuation_location, e.evacuation_route, e.evacuation_method,
+                   e.discharge_range, e.flow_rate,
+                   e.transfer_person, e.transfer_person_phone,
+                   e.resettlement_person, e.resettlement_phone,
+                   e.region, e.department, e.responsibility, e.remark
+            FROM reservoirs r
+            JOIN water_level_thresholds w ON r.code = w.reservoir_code
+            JOIN townships t ON w.id = t.water_level_id
+            JOIN villages v ON t.id = v.township_id
+            LEFT JOIN evacuation_details e ON v.id = e.village_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY r.name, w.water_level, t.township_name, v.village_name
+        """
+        return get_db().execute_query(sql, params)
+
+    @staticmethod
+    def search_village(keyword: str) -> List[Dict]:
+        """按村庄名模糊搜索"""
+        sql = """
+            SELECT r.name AS reservoir_name, r.code AS reservoir_code,
+                   w.water_level, t.township_name, v.village_name,
+                   e.contact_name, e.contact_phone,
+                   e.evacuation_location, e.evacuation_route
+            FROM reservoirs r
+            JOIN water_level_thresholds w ON r.code = w.reservoir_code
+            JOIN townships t ON w.id = t.water_level_id
+            JOIN villages v ON t.id = v.township_id
+            LEFT JOIN evacuation_details e ON v.id = e.village_id
+            WHERE v.village_name LIKE ?
+            ORDER BY r.name, v.village_name
+        """
+        return get_db().execute_query(sql, (f"%{keyword}%",))
+
+    @staticmethod
+    def get_water_levels(reservoir_name: str) -> List[Dict]:
+        """获取某水库的所有水位阈值"""
+        sql = """
+            SELECT DISTINCT w.water_level, w.level_description,
+                   COUNT(DISTINCT t.id) AS township_count,
+                   COUNT(DISTINCT v.id) AS village_count
+            FROM reservoirs r
+            JOIN water_level_thresholds w ON r.code = w.reservoir_code
+            LEFT JOIN townships t ON w.id = t.water_level_id
+            LEFT JOIN villages v ON t.id = v.township_id
+            WHERE r.name = ?
+            GROUP BY w.water_level
+            ORDER BY w.water_level
+        """
+        return get_db().execute_query(sql, (reservoir_name,))
+
+    @staticmethod
+    def get_townships(reservoir_name: str, water_level: float = None) -> List[Dict]:
+        """获取某水库-水位下的所有乡镇"""
+        conditions = ["r.name = ?"]
+        params = [reservoir_name]
+        if water_level is not None:
+            conditions.append("ABS(w.water_level - ?) < 0.01")
+            params.append(water_level)
+
+        sql = f"""
+            SELECT DISTINCT t.township_name,
+                   COUNT(DISTINCT v.id) AS village_count
+            FROM reservoirs r
+            JOIN water_level_thresholds w ON r.code = w.reservoir_code
+            JOIN townships t ON w.id = t.water_level_id
+            LEFT JOIN villages v ON t.id = v.township_id
+            WHERE {' AND '.join(conditions)}
+            GROUP BY t.township_name
+            ORDER BY t.township_name
+        """
+        return get_db().execute_query(sql, params)
+
+
+class FloodInundationStatsAccess:
+    """淹没损失统计数据访问"""
+    
+    @staticmethod
+    def get_by_reservoir_code(reservoir_code: str) -> List[Dict]:
+        """根据水库编码获取淹没损失统计"""
+        sql = """
+            SELECT * FROM flood_inundation_stats 
+            WHERE reservoir_code = ?
+            ORDER BY level_range, village
+        """
+        return get_db().execute_query(sql, (reservoir_code,))
+    
+    @staticmethod
+    def get_by_level_range(level_range: str) -> List[Dict]:
+        """根据水位区间获取淹没损失统计"""
+        sql = """
+            SELECT * FROM flood_inundation_stats 
+            WHERE level_range LIKE ?
+            ORDER BY reservoir_code, village
+        """
+        like_pattern = f"%{level_range}%"
+        return get_db().execute_query(sql, (like_pattern,))
+    
+    @staticmethod
+    def get_by_village(village: str) -> List[Dict]:
+        """根据村庄名称获取淹没损失统计"""
+        sql = """
+            SELECT * FROM flood_inundation_stats 
+            WHERE village LIKE ?
+            ORDER BY reservoir_code, level_range
+        """
+        like_pattern = f"%{village}%"
+        return get_db().execute_query(sql, (like_pattern,))
+    
+    @staticmethod
+    def get_all() -> List[Dict]:
+        """获取所有淹没损失统计"""
+        sql = "SELECT * FROM flood_inundation_stats ORDER BY reservoir_code, level_range, village"
+        return get_db().execute_query(sql)
+    
+    @staticmethod
+    def search(keyword: str) -> List[Dict]:
+        """根据水库编码、水位区间或村庄名称搜索"""
+        sql = """
+            SELECT * FROM flood_inundation_stats 
+            WHERE reservoir_code = ? OR level_range LIKE ? OR village LIKE ?
+            ORDER BY reservoir_code, level_range, village
+        """
+        like_pattern = f"%{keyword}%"
+        results = get_db().execute_query(sql, (keyword, like_pattern, like_pattern))
+        
+        # 如果没有结果，尝试模糊匹配水库编码
+        if not results:
+            sql = """
+                SELECT * FROM flood_inundation_stats 
+                WHERE reservoir_code LIKE ? OR level_range LIKE ? OR village LIKE ?
+                ORDER BY reservoir_code, level_range, village
+            """
+            code_pattern = f"%{keyword}%"
+            results = get_db().execute_query(sql, (code_pattern, like_pattern, like_pattern))
+        
+        return results
+
+
+class FloodContactPhoneAccess:
+    """防汛联系电话数据访问"""
+    
+    @staticmethod
+    def get_by_reservoir_code(reservoir_code: str) -> List[Dict]:
+        """根据水库编码获取联系电话"""
+        sql = """
+            SELECT * FROM flood_contact_phones 
+            WHERE reservoir_code = ?
+            ORDER BY sort_order, unit_name
+        """
+        return get_db().execute_query(sql, (reservoir_code,))
+    
+    @staticmethod
+    def get_by_unit_name(unit_name: str) -> List[Dict]:
+        """根据单位名称获取联系电话"""
+        sql = """
+            SELECT * FROM flood_contact_phones 
+            WHERE unit_name LIKE ?
+            ORDER BY sort_order, reservoir_code
+        """
+        like_pattern = f"%{unit_name}%"
+        return get_db().execute_query(sql, (like_pattern,))
+    
+    @staticmethod
+    def get_all() -> List[Dict]:
+        """获取所有联系电话"""
+        sql = "SELECT * FROM flood_contact_phones ORDER BY reservoir_code, sort_order, unit_name"
+        return get_db().execute_query(sql)
+    
+    @staticmethod
+    def search(keyword: str) -> List[Dict]:
+        """根据水库编码或单位名称搜索"""
+        sql = """
+            SELECT * FROM flood_contact_phones 
+            WHERE reservoir_code = ? OR unit_name LIKE ? OR phone LIKE ?
+            ORDER BY reservoir_code, sort_order, unit_name
+        """
+        like_pattern = f"%{keyword}%"
+        results = get_db().execute_query(sql, (keyword, like_pattern, like_pattern))
+        
+        # 如果没有结果，尝试模糊匹配水库编码
+        if not results:
+            sql = """
+                SELECT * FROM flood_contact_phones 
+                WHERE reservoir_code LIKE ? OR unit_name LIKE ?
+                ORDER BY reservoir_code, sort_order, unit_name
+            """
+            code_pattern = f"%{keyword}%"
+            results = get_db().execute_query(sql, (code_pattern, like_pattern))
+        
+        return results
+
+
+class FloodControlContactAccess:
+    """防汛联系人数据访问"""
+    
+    @staticmethod
+    def get_by_reservoir_code(reservoir_code: str) -> List[Dict]:
+        """根据水库编码获取防汛联系人"""
+        sql = """
+            SELECT * FROM flood_control_contacts 
+            WHERE reservoir_code = ?
+            ORDER BY sort_order, name
+        """
+        return get_db().execute_query(sql, (reservoir_code,))
+    
+    @staticmethod
+    def get_by_category(category: str) -> List[Dict]:
+        """根据联系人类别获取防汛联系人"""
+        sql = """
+            SELECT * FROM flood_control_contacts 
+            WHERE plan_category LIKE ?
+            ORDER BY sort_order, name
+        """
+        like_pattern = f"%{category}%"
+        return get_db().execute_query(sql, (like_pattern,))
+    
+    @staticmethod
+    def get_all() -> List[Dict]:
+        """获取所有防汛联系人"""
+        sql = "SELECT * FROM flood_control_contacts ORDER BY plan_category, sort_order, name"
+        return get_db().execute_query(sql)
+    
+    @staticmethod
+    def search(keyword: str) -> List[Dict]:
+        """根据姓名、职务或单位名称搜索"""
+        sql = """
+            SELECT * FROM flood_control_contacts 
+            WHERE name LIKE ? OR title LIKE ? OR unit LIKE ? OR plan_category LIKE ?
+            ORDER BY plan_category, sort_order, name
+        """
+        like_pattern = f"%{keyword}%"
+        return get_db().execute_query(sql, (like_pattern, like_pattern, like_pattern, like_pattern))
