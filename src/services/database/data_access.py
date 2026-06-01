@@ -519,7 +519,7 @@ class SchemeAccess:
             scheme['scheme_id'] = scheme_id
         
         existing = SchemeAccess.get_by_id(scheme_id)
-        
+
         if existing:
             sql = """
                 UPDATE schemes SET
@@ -545,7 +545,28 @@ class SchemeAccess:
                 scheme.get('status', 'draft'),
                 json.dumps(scheme.get('constraints', [])),
                 json.dumps(scheme.get('details', [])),
-                json.dumps(scheme.get('constraints_applied', {}))
+                json.dumps(scheme.get('constraints_applied', {})),
+                scheme_id,
+            ))
+        else:
+            sql = """
+                INSERT INTO schemes (
+                    scheme_id, scheme_name, description, basin,
+                    start_date, end_date, status,
+                    constraints, details, constraints_applied
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            get_db().execute_insert(sql, (
+                scheme_id,
+                scheme.get('scheme_name'),
+                scheme.get('description'),
+                scheme.get('basin'),
+                scheme.get('start_date'),
+                scheme.get('end_date'),
+                scheme.get('status', 'draft'),
+                json.dumps(scheme.get('constraints', [])),
+                json.dumps(scheme.get('details', [])),
+                json.dumps(scheme.get('constraints_applied', {})),
             ))
         
         if scheme.get('reservoirs'):
@@ -554,40 +575,60 @@ class SchemeAccess:
                 (scheme_id,)
             )
             for res_code, res_data in scheme['reservoirs'].items():
+                timeseries = res_data.get('timeseries', [])
+                if timeseries:
+                    levels = [t['water_level'] for t in timeseries if t.get('water_level') is not None]
+                    inflows = [t['inflow'] for t in timeseries if t.get('inflow') is not None]
+                    outflows = [t['outflow'] for t in timeseries if t.get('outflow') is not None]
+                    avg_level = round(sum(levels) / len(levels), 2) if levels else None
+                    avg_inflow = round(sum(inflows) / len(inflows), 2) if inflows else None
+                    avg_outflow = round(sum(outflows) / len(outflows), 2) if outflows else None
+                else:
+                    avg_level = avg_inflow = avg_outflow = None
                 sql = """
                     INSERT INTO scheme_reservoirs (
                         scheme_id, reservoir_code, timeseries,
-                        max_level, max_inflow, max_outflow, max_storage
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        max_level, max_inflow, max_outflow, max_storage,
+                        avg_level, avg_inflow, avg_outflow
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 get_db().execute_insert(sql, (
                     scheme_id,
                     res_code,
-                    json.dumps(res_data.get('timeseries', [])),
+                    json.dumps(timeseries),
                     res_data.get('max_level'),
                     res_data.get('max_inflow'),
                     res_data.get('max_outflow'),
-                    res_data.get('max_storage')
+                    res_data.get('max_storage'),
+                    avg_level,
+                    avg_inflow,
+                    avg_outflow,
                 ))
-        
+
         if scheme.get('hydrological_stations'):
             get_db().execute_update(
                 "DELETE FROM scheme_stations WHERE scheme_id = ?",
                 (scheme_id,)
             )
             for station_code, station_data in scheme['hydrological_stations'].items():
+                timeseries = station_data.get('timeseries', [])
+                if timeseries:
+                    flows = [t['flow'] for t in timeseries if t.get('flow') is not None]
+                    avg_flow = round(sum(flows) / len(flows), 2) if flows else None
+                else:
+                    avg_flow = None
                 sql = """
                     INSERT INTO scheme_stations (
                         scheme_id, station_code, timeseries,
-                        max_flow, max_level
+                        max_flow, avg_flow
                     ) VALUES (?, ?, ?, ?, ?)
                 """
                 get_db().execute_insert(sql, (
                     scheme_id,
                     station_code,
-                    json.dumps(station_data.get('timeseries', [])),
+                    json.dumps(timeseries),
                     station_data.get('max_flow'),
-                    station_data.get('max_level')
+                    avg_flow,
                 ))
         
         logger.info(f"调度方案 {scheme_id} 已保存")
