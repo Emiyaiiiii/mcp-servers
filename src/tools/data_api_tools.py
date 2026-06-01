@@ -1525,6 +1525,8 @@ def register_data_api_tools(mcp: FastMCP):
                 "msg": "success",
                 "data": [
                     {
+                        "village_id": 123,
+                        "evacuation_id": 456,
                         "reservoir_name": "故县水库",
                         "water_level": 533.64,
                         "township_name": "故县镇",

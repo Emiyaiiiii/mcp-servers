@@ -945,8 +945,8 @@ class EvacuationQueryAccess:
         sql = f"""
             SELECT r.name AS reservoir_name, r.code AS reservoir_code,
                    w.water_level, w.level_description,
-                   t.township_name, v.village_name,
-                   e.contact_name, e.contact_title, e.contact_phone,
+                   t.township_name, v.id AS village_id, v.village_name,
+                   e.id AS evacuation_id, e.contact_name, e.contact_title, e.contact_phone,
                    e.evacuation_location, e.evacuation_route, e.evacuation_method,
                    e.discharge_range, e.flow_rate,
                    e.transfer_person, e.transfer_person_phone,
@@ -967,8 +967,8 @@ class EvacuationQueryAccess:
         """按村庄名模糊搜索"""
         sql = """
             SELECT r.name AS reservoir_name, r.code AS reservoir_code,
-                   w.water_level, t.township_name, v.village_name,
-                   e.contact_name, e.contact_phone,
+                   w.water_level, t.township_name, v.id AS village_id, v.village_name,
+                   e.id AS evacuation_id, e.contact_name, e.contact_phone,
                    e.evacuation_location, e.evacuation_route
             FROM reservoirs r
             JOIN water_level_thresholds w ON r.code = w.reservoir_code

@@ -815,3 +815,102 @@ def register_ui_tools(mcp: FastMCP):
         }
         logger.debug(f"clear_warning_highlights 返回结果: {return_value}")
         return return_value
+
+    @mcp.tool()
+    async def show_evacuation_routes(
+        village_ids: list,
+        session_id: str = None
+    ) -> dict:
+        """在GIS场景中显示撤离转移路线标注。
+
+        根据村庄ID列表，从数据库查询转移路线数据后发送到GIS场景标注。
+
+        Args:
+            village_ids: 村庄ID列表，如 [123, 456, 789]。
+                由 query_evacuation 返回结果中的 village_id 字段获取。
+                传入空列表 [] 可清除全部标注。
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送标注指令的确认信息
+        """
+        logger.info(f"调用 show_evacuation_routes，收到 village_ids: {village_ids}, session_id={repr(session_id)}")
+
+        if not village_ids:
+            result = await scene_connector.clear_evacuation_routes_async(target_session=session_id)
+            return {"success": True, "route_count": 0, "message": "已清除全部转移路线标注"}
+
+        placeholders = ','.join('?' * len(village_ids))
+        from src.services.database.connection import get_db
+        db = get_db()
+        rows = db.execute_query(
+            f"""
+            SELECT v.id AS village_id,
+                   v.village_name,
+                   r.name AS reservoir_name,
+                   w.water_level,
+                   e.evacuation_location,
+                   e.evacuation_route,
+                   e.contact_name,
+                   e.contact_phone
+            FROM villages v
+            JOIN townships t ON v.township_id = t.id
+            JOIN water_level_thresholds w ON t.water_level_id = w.id
+            JOIN reservoirs r ON w.reservoir_code = r.code
+            LEFT JOIN evacuation_details e ON v.id = e.village_id
+            WHERE v.id IN ({placeholders})
+            """,
+            village_ids
+        )
+
+        routes = []
+        for row in rows:
+            if row.get('village_id'):
+                routes.append({
+                    "id": str(row['village_id']),
+                    "name": row.get('village_name', ''),
+                    "reservoir": row.get('reservoir_name', ''),
+                    "water_level": row.get('water_level'),
+                    "evacuation_location": row.get('evacuation_location', ''),
+                    "evacuation_route": row.get('evacuation_route', ''),
+                    "contact_name": row.get('contact_name', ''),
+                    "contact_phone": row.get('contact_phone', ''),
+                })
+
+        result = await scene_connector.send_evacuation_routes_async(routes, target_session=session_id)
+        return_value = {
+            "success": True,
+            "route_count": len(routes),
+            "message": f"已发送 {len(routes)} 条转移路线标注到GIS场景",
+            "command": "FUNC_EVACUATION_ROUTE_SHOW",
+            "response": result
+        }
+        logger.debug(f"show_evacuation_routes 返回结果: {return_value}")
+        return return_value
+
+    @mcp.tool()
+    async def clear_evacuation_routes(
+        route_ids: list = None,
+        session_id: str = None
+    ) -> dict:
+        """清除GIS场景中的转移路线标注。
+
+        Args:
+            route_ids: 要清除的路线ID列表，如 ["village_1", "village_2"]，
+                为空或 None 时清除全部转移路线标注
+            session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
+
+        Returns:
+            发送清除指令的确认信息
+        """
+        logger.info(f"调用 clear_evacuation_routes，收到参数: route_ids={repr(route_ids)}, session_id={repr(session_id)}")
+        result = await scene_connector.clear_evacuation_routes_async(route_ids, target_session=session_id)
+        return_value = {
+            "success": True,
+            "cleared_ids": route_ids,
+            "message": f"已清除转移路线标注（{'全部' if not route_ids else f'{len(route_ids)}条'}）",
+            "command": "FUNC_EVACUATION_ROUTE_SHOW",
+            "response": result
+        }
+        logger.debug(f"clear_evacuation_routes 返回结果: {return_value}")
+        return return_value
