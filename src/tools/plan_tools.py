@@ -9,6 +9,7 @@ from src.tools.data_api_tools import _resolve_reservoir_for_api, _resolve_statio
 from src.services.database.data_access import (
     WaterLevelAccess, CoefficientAccess, HolePriorityAccess
 )
+from src.services.enhanced_search_service import enhanced_search_service
 
 logger = get_logger(__name__)
 
@@ -670,7 +671,7 @@ def register_plan_tools(mcp: FastMCP):
     @mcp.tool()
     async def query_knowledge_base(query: str, mode: str = "hybrid") -> dict:
         """
-        查询防洪知识库。
+        查询防洪知识库（同时从两个数据源获取）。
 
         Args:
             query: 查询关键词，如: 水库调度, 防洪预演, 预警响应, 应急处置
@@ -681,11 +682,18 @@ def register_plan_tools(mcp: FastMCP):
         """
         logger.info(f"调用 query_knowledge_base，收到参数: query={repr(query)}, mode={repr(mode)}")
         
+        # 存储两个数据源的结果
+        results = {
+            "knowledge_graph": None,
+            "knowledge_base": None
+        }
+        
+        # 第一个数据源：知识图谱接口
         try:
             payload = {
                 "query": query,
                 "mode": mode,
-                "top_k": 10
+                "top_k": 3
             }
             
             response = requests.post(KNOWLEDGE_BASE_API_URL, json=payload, timeout=30)
@@ -694,58 +702,107 @@ def register_plan_tools(mcp: FastMCP):
             result = response.json()
             
             if result.get("status") == "success":
-                data = result.get("data", {})
-                metadata = result.get("metadata", {})
-                
-                entities = data.get("entities", [])
-                relationships = data.get("relationships", [])
-                chunks = data.get("chunks", [])
-                references = data.get("references", [])
-                
-                summary = []
-                if chunks:
-                    for chunk in chunks[:3]:
-                        content = chunk.get("content", "")[:300]
-                        source = chunk.get("file_path", "")
-                        summary.append(f"【内容片段】{content}...\n来源: {source}")
-                
-                if entities:
-                    for entity in entities[:3]:
-                        name = entity.get("entity_name", "")
-                        entity_type = entity.get("entity_type", "")
-                        desc = entity.get("description", "")[:200]
-                        summary.append(f"【实体】{name} ({entity_type}): {desc}...")
-                
-                if relationships:
-                    for rel in relationships[:3]:
-                        src = rel.get("src_id", "")
-                        tgt = rel.get("tgt_id", "")
-                        desc = rel.get("description", "")[:150]
-                        summary.append(f"【关系】{src} -> {tgt}: {desc}...")
-                
-                return_value = {
-                    "success": True,
-                    "query": query,
-                    "mode": mode,
-                    "entities": entities,
-                    "relationships": relationships,
-                    "chunks": chunks,
-                    "references": references,
-                    "metadata": metadata,
-                    "summary": "\n\n".join(summary) if summary else "未找到相关知识"
-                }
-                logger.debug(f"query_knowledge_base 返回结果: 成功检索到 {len(entities)} 个实体, {len(relationships)} 个关系, {len(chunks)} 个文本片段")
-                return return_value
-            
+                results["knowledge_graph"] = result
+                logger.debug(f"知识图谱查询成功: {result.get('data', {})}")
             else:
-                error_msg = result.get("message", "查询失败")
-                logger.error(f"知识库查询失败: {error_msg}")
-                return {"success": False, "error": error_msg, "query": query}
+                logger.warning(f"知识图谱查询失败: {result.get('message', '未知错误')}")
         
         except requests.exceptions.RequestException as e:
-            error_msg = f"调用知识库接口失败: {str(e)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg, "query": query}
+            logger.warning(f"调用知识图谱接口失败: {str(e)}")
+        
+        # 第二个数据源：知识库接口
+        try:
+            knowledge_base_result = enhanced_search_service.search_documents(query, knowledge_base_ids=[3212], top_k=3)
+            if knowledge_base_result:
+                results["knowledge_base"] = knowledge_base_result
+                logger.debug(f"知识库接口查询成功")
+        except Exception as e:
+            logger.warning(f"调用知识库接口失败: {str(e)}")
+        
+        # 合并两个数据源的结果
+        entities = []
+        relationships = []
+        chunks = []
+        references = []
+        knowledge_base_chunks = []
+        summary = []
+        
+        # 处理知识图谱结果
+        if results["knowledge_graph"] and results["knowledge_graph"].get("status") == "success":
+            data = results["knowledge_graph"].get("data", {})
+            entities.extend(data.get("entities", []))
+            relationships.extend(data.get("relationships", []))
+            chunks.extend(data.get("chunks", []))
+            references.extend(data.get("references", []))
+            
+            if chunks:
+                for chunk in chunks:
+                    content = chunk.get("content", "")[:300]
+                    source = chunk.get("file_path", "")
+                    summary.append(f"【知识图谱-内容片段】{content}...\n来源: {source}")
+            
+            if entities:
+                for entity in entities:
+                    name = entity.get("entity_name", "")
+                    entity_type = entity.get("entity_type", "")
+                    desc = entity.get("description", "")[:200]
+                    summary.append(f"【知识图谱-实体】{name} ({entity_type}): {desc}...")
+            
+            if relationships:
+                for rel in relationships:
+                    src = rel.get("src_id", "")
+                    tgt = rel.get("tgt_id", "")
+                    desc = rel.get("description", "")[:150]
+                    summary.append(f"【知识图谱-关系】{src} -> {tgt}: {desc}...")
+        
+        # 处理知识库结果
+        if results["knowledge_base"]:
+            knowledge_base_data = results["knowledge_base"].get("data", results["knowledge_base"])
+            
+            if isinstance(knowledge_base_data, list):
+                for item in knowledge_base_data:
+                    content = item.get("content", "") or item.get("text", "")[:300]
+                    title = item.get("title", "")
+                    source = item.get("source", "") or item.get("file_name", "")
+                    if content:
+                        knowledge_base_chunks.append({
+                            "content": content,
+                            "title": title,
+                            "source": source
+                        })
+                        summary.append(f"【知识库-文档】{title}\n{content}...\n来源: {source}")
+            elif isinstance(knowledge_base_data, dict):
+                docs = knowledge_base_data.get("documents", []) or knowledge_base_data.get("results", [])
+                for doc in docs:
+                    content = doc.get("content", "") or doc.get("text", "")[:300]
+                    title = doc.get("title", "")
+                    source = doc.get("source", "") or doc.get("file_name", "")
+                    if content:
+                        knowledge_base_chunks.append({
+                            "content": content,
+                            "title": title,
+                            "source": source
+                        })
+                        summary.append(f"【知识库-文档】{title}\n{content}...\n来源: {source}")
+        
+        return_value = {
+            "success": True,
+            "query": query,
+            "mode": mode,
+            "entities": entities,
+            "relationships": relationships,
+            "chunks": chunks,
+            "knowledge_base_chunks": knowledge_base_chunks,
+            "references": references,
+            "summary": "\n\n".join(summary) if summary else "未找到相关知识",
+            "sources": {
+                "knowledge_graph": results["knowledge_graph"] is not None,
+                "knowledge_base": results["knowledge_base"] is not None
+            }
+        }
+        
+        logger.debug(f"query_knowledge_base 返回结果: 成功检索到 {len(entities)} 个实体, {len(relationships)} 个关系, {len(chunks)} 个文本片段, {len(knowledge_base_chunks)} 个知识库文档")
+        return return_value
 
 def _generate_xiaolangdi_scheme_core(
     date: str,

@@ -9,6 +9,8 @@ from src.utils.logger import get_logger
 from src.services.scheme_storage import save_scheme, generate_unique_id
 from src.services.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service
 from src.services.auth_service import auth_service
+from src.services.water_forecast_service import water_forecast_service
+from src.utils.station_codes import get_reservoir_code, get_hydrology_code
 from src.config.settings import settings
 
 logger = get_logger(__name__)
@@ -63,50 +65,72 @@ def register_forecast_models(mcp: FastMCP):
         return return_value
 
     @mcp.tool()
-    async def run_flood_routing_model(river_section: str, inflow: str, initial_conditions: str) -> dict:
+    async def run_water_forecast_model(station_type: str, station_name: str, start_time: str = None, end_time: str = None) -> dict:
         """
-        执行洪水演进模型。
+        执行来水预报模型，根据站点类型调用不同接口获取预报数据。
 
         Args:
-            river_section: 河段名称（如：三门峡-小浪底、洛河段等）
-            inflow: 入流数据 (JSON格式)，包含上游站的流量过程
-            initial_conditions: 初始条件 (JSON格式)，包含初始水位、流量等
+            station_type: 站点类型，可选值: reservoir(水库), hydrology(水文站)
+            station_name: 站点名称，如: 三门峡, 小浪底, 龙门镇, 花园口等（支持名称匹配编码）
+            start_time: 开始时间（格式：YYYY-MM-DD HH:MM:SS），不指定则使用当前时间前一天
+            end_time: 结束时间（格式：YYYY-MM-DD HH:MM:SS），不指定则使用当前时间后一天
         """
-        logger.info(f"调用 run_flood_routing_model，收到参数: river_section={repr(river_section)}, inflow={repr(inflow)}, initial_conditions={repr(initial_conditions)}")
+        logger.info(f"调用 run_water_forecast_model，收到参数: station_type={repr(station_type)}, station_name={repr(station_name)}, start_time={repr(start_time)}, end_time={repr(end_time)}")
+        
+        # 设置默认时间范围
+        if not start_time:
+            start_time = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        if not end_time:
+            end_time = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        
         try:
-            inflow_data = json.loads(inflow) if isinstance(inflow, str) else inflow
-            init_cond = json.loads(initial_conditions) if isinstance(initial_conditions, str) else initial_conditions
-        except json.JSONDecodeError:
-            return_value = {"success": False, "error": "输入数据格式错误，请提供有效的JSON格式"}
-            logger.debug(f"run_flood_routing_model 返回结果: {return_value}")
+            if station_type.lower() == "reservoir":
+                # 解析水库名称到编码
+                station_code = get_reservoir_code(station_name)
+                if not station_code:
+                    return_value = {"success": False, "error": f"未找到水库: {station_name}"}
+                    logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                    return return_value
+                # 调用水库预报接口
+                result = water_forecast_service.get_reservoir_forecast(station_code, start_time, end_time)
+            elif station_type.lower() == "hydrology":
+                # 解析水文站名称到编码
+                station_code = get_hydrology_code(station_name)
+                if not station_code:
+                    return_value = {"success": False, "error": f"未找到水文站: {station_name}"}
+                    logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                    return return_value
+                # 调用水文站预报接口
+                result = water_forecast_service.get_hydrology_forecast(station_code, start_time, end_time)
+            else:
+                return_value = {"success": False, "error": f"不支持的站点类型: {station_type}，请使用 reservoir 或 hydrology"}
+                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                return return_value
+            
+            if result.get("success") is False or result.get("code") not in [200, "200", None]:
+                error_msg = result.get("message", result.get("error", "调用预报接口失败"))
+                return_value = {"success": False, "error": error_msg}
+                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                return return_value
+            
+            return_value = {
+                "success": True,
+                "station_type": station_type,
+                "station_name": station_name,
+                "station_code": station_code,
+                "start_time": start_time,
+                "end_time": end_time,
+                "command": "FUNC_RUN_WATER_FORECAST_MODEL",
+                "forecast_data": result.get("data", result),
+                "message": f"来水预报模型执行成功，已获取{station_type} {station_name}({station_code})的预报数据"
+            }
+            logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
             return return_value
-
-        initial_level = init_cond.get("initial_water_level", 100)
-
-        routing_result = []
-        for i, point in enumerate(inflow_data):
-            inflow_val = float(point.get("inflow", 0))
-            attenuation = 0.85 + random.uniform(0, 0.1)
-            routed_flow = inflow_val * attenuation
-            routed_level = initial_level + random.uniform(-2, 3)
-            routing_result.append({
-                "hour": i,
-                "inflow": inflow_val,
-                "outflow": round(routed_flow, 2),
-                "water_level": round(routed_level, 2)
-            })
-
-        return_value = {
-            "success": True,
-            "river_section": river_section,
-            "command": "FUNC_RUN_FLOOD_ROUTING_MODEL",
-            "initial_conditions": init_cond,
-            "routing_result": routing_result,
-            "peak_attenuation": round(100 * (1 - 0.88), 2),
-            "message": f"洪水演进模型执行成功，{river_section}演进计算完成"
-        }
-        logger.debug(f"run_flood_routing_model 返回结果: {return_value}")
-        return return_value
+            
+        except Exception as e:
+            error_msg = f"执行来水预报模型时出错: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
 
     @mcp.tool()
     async def generate_dispatch_scheme(
@@ -385,29 +409,43 @@ def register_forecast_models(mcp: FastMCP):
 
     @mcp.tool()
     async def run_xinanjiang_model(
+        station_name: str,
         start_time: str,
         end_time: str,
-        control_params: Dict[str, Any] = None
+        custom_params: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         运行新安江水文模型。
-        
-        大模型只需要传入开始时间和结束时间，工具会自动完成：
-        1. 获取降雨数据（整个时间范围的站点降雨量）
-        2. 计算等时段面雨量值（按小时划分）
-        3. 构建模型参数
-        4. 调用新安江模型进行计算
-        5. 返回计算结果
-        
+
         Args:
+            station_name: 站点名称，支持水库或水文站，如：
+                - 水库：陆浑水库、故县水库、三门峡水库、小浪底水库、河口村水库
+                - 水文站：龙门镇、白马寺、黑石关、花园口
+                系统会自动从数据库加载该站点的默认参数，并查询对应的降雨数据。
             start_time: 开始时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 08:00:00"
             end_time: 结束时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 12:00:00"
-            control_params: 可选的控制参数，如果不传则使用默认参数
-        
+            custom_params: 可选的自定义参数，用于覆盖站点默认参数。
+                支持的参数包括：
+                - KC: 流域蒸散发折算系数 (默认: 0.9)
+                - B: 流域蓄水容量分布曲线指数 (默认: 0.4)
+                - UM: 上层张力水容量 (默认: 30mm)
+                - LM: 下层张力水容量 (默认: 80mm)
+                - SM: 自由水容量 (默认: 25mm)
+                - KG: 地下水日出流系数 (默认: 0.3)
+                - KI: 壤中流日出流系数 (默认: 0.3)
+                - BA: 流域面积 (默认: 根据站点)
+                - XE: 马斯京跟法演算参数 (默认: 0.2)
+
         Returns:
             {
                 "success": true,
                 "message": "模型运行成功",
+                "station_info": {
+                    "station_name": "陆浑水库",
+                    "station_type": "reservoir",
+                    "basin_name": "伊洛河",
+                    "basin_area": 349.0
+                },
                 "result": {
                     "start_time": "2026-04-15 08:00:00",
                     "end_time": "2026-04-15 12:00:00",
@@ -417,7 +455,20 @@ def register_forecast_models(mcp: FastMCP):
                 }
             }
         """
-        logger.info(f"调用 run_xinanjiang_model，时间范围: {start_time} 至 {end_time}")
+        logger.info(f"调用 run_xinanjiang_model，站点: {station_name}，时间范围: {start_time} 至 {end_time}")
+        
+        from src.services.database.xinanjiang_config_access import XinanjiangModelConfigAccess
+        
+        station_config = XinanjiangModelConfigAccess.get_config_by_station(station_name)
+        if not station_config:
+            return {"success": False, "message": f"未找到站点配置: {station_name}，请检查站点名称是否正确", "code": 404}
+        
+        station_type = station_config.get('station_type', 'reservoir')
+        station_code = station_config.get('station_code', '')
+        basin_name = station_config.get('basin_name', '')
+        basin_area = station_config.get('basin_area', 101.7298)
+        
+        logger.info(f"站点配置信息: {station_name}({station_type}), 流域: {basin_name}, 面积: {basin_area}km²")
         
         def _get_rainfall_data(start: str, end: str, retry: bool = True) -> Dict[str, Any]:
             base_url = getattr(settings, 'DATA_API_BASE_URL', 'http://wt.hxyai.cn/fx')
@@ -508,31 +559,36 @@ def register_forecast_models(mcp: FastMCP):
             
             return _generate_simulation_rainfall(length, avg_rainfall)
         
-        def _build_control_params() -> Dict[str, Any]:
+        def _build_control_params(config: Dict[str, Any], custom: Dict[str, Any] = None) -> Dict[str, Any]:
+            params = {**config}
+            if custom:
+                params.update(custom)
+                logger.info(f"使用自定义参数覆盖默认值: {custom}")
+            
             return {
                 "ncName": "control",
                 "type": "hydraulic_elements",
                 "dimensionsList": [],
                 "variablesList": [],
                 "globalList": [
-                    {"type": "float", "name": "KC", "fullName": "流域蒸散发折算系数(KC)", "value": "0.9"},
-                    {"type": "float", "name": "B", "fullName": "流域蓄水容量分布曲线指数(B)", "value": "0.4"},
-                    {"type": "int", "name": "UM", "fullName": "上层张力水容量(UM)", "value": "30"},
-                    {"type": "int", "name": "LM", "fullName": "下层张力水容量(LM)", "value": "80"},
-                    {"type": "float", "name": "EX", "fullName": "流域自由水容量分布曲线指数(EX)", "value": "1.5"},
-                    {"type": "float", "name": "C", "fullName": "深层蒸散发折算系数(C)", "value": "0.12"},
-                    {"type": "float", "name": "IM", "fullName": "不透水面积比例(IM)", "value": "0"},
-                    {"type": "float", "name": "WM", "fullName": "张力水容量(WM)", "value": "120"},
-                    {"type": "float", "name": "SM", "fullName": "自由水客量(SM)", "value": "25"},
-                    {"type": "float", "name": "KG", "fullName": "地下水日出流系数(KG)", "value": "0.3"},
-                    {"type": "float", "name": "KI", "fullName": "壤中流日出流系数(KI)", "value": "0.3"},
-                    {"type": "float", "name": "CS", "fullName": "地表水流消退系数(CS)", "value": "0.8"},
-                    {"type": "float", "name": "CG", "fullName": "地下水日消退系数(CG)", "value": "1"},
-                    {"type": "float", "name": "CI", "fullName": "壤中流日消退系数(CI)", "value": "1"},
-                    {"type": "float", "name": "CR", "fullName": "日模型河网蓄水消退系数(CR)", "value": "0.2"},
-                    {"type": "double", "name": "BA", "fullName": "流域面积(BA)", "value": "101.7298"},
-                    {"type": "float", "name": "XE", "fullName": "马斯京跟法演算参数(XE)", "value": "0.2"},
-                    {"type": "int", "name": "KE", "fullName": "马斯京跟法演算参数(KE)", "value": "1"}
+                    {"type": "float", "name": "KC", "fullName": "流域蒸散发折算系数(KC)", "value": str(params.get('KC', 0.9))},
+                    {"type": "float", "name": "B", "fullName": "流域蓄水容量分布曲线指数(B)", "value": str(params.get('B', 0.4))},
+                    {"type": "int", "name": "UM", "fullName": "上层张力水容量(UM)", "value": str(params.get('UM', 30))},
+                    {"type": "int", "name": "LM", "fullName": "下层张力水容量(LM)", "value": str(params.get('LM', 80))},
+                    {"type": "float", "name": "EX", "fullName": "流域自由水容量分布曲线指数(EX)", "value": str(params.get('EX', 1.5))},
+                    {"type": "float", "name": "C", "fullName": "深层蒸散发折算系数(C)", "value": str(params.get('C', 0.12))},
+                    {"type": "float", "name": "IM", "fullName": "不透水面积比例(IM)", "value": str(params.get('IM', 0))},
+                    {"type": "float", "name": "WM", "fullName": "张力水容量(WM)", "value": str(params.get('WM', 120))},
+                    {"type": "float", "name": "SM", "fullName": "自由水客量(SM)", "value": str(params.get('SM', 25))},
+                    {"type": "float", "name": "KG", "fullName": "地下水日出流系数(KG)", "value": str(params.get('KG', 0.3))},
+                    {"type": "float", "name": "KI", "fullName": "壤中流日出流系数(KI)", "value": str(params.get('KI', 0.3))},
+                    {"type": "float", "name": "CS", "fullName": "地表水流消退系数(CS)", "value": str(params.get('CS', 0.8))},
+                    {"type": "float", "name": "CG", "fullName": "地下水日消退系数(CG)", "value": str(params.get('CG', 1))},
+                    {"type": "float", "name": "CI", "fullName": "壤中流日消退系数(CI)", "value": str(params.get('CI', 1))},
+                    {"type": "float", "name": "CR", "fullName": "日模型河网蓄水消退系数(CR)", "value": str(params.get('CR', 0.2))},
+                    {"type": "double", "name": "BA", "fullName": "流域面积(BA)", "value": str(params.get('basin_area', 101.7298))},
+                    {"type": "float", "name": "XE", "fullName": "马斯京跟法演算参数(XE)", "value": str(params.get('XE', 0.2))},
+                    {"type": "int", "name": "KE", "fullName": "马斯京跟法演算参数(KE)", "value": str(params.get('KE', 1))}
                 ]
             }
         
@@ -595,7 +651,7 @@ def register_forecast_models(mcp: FastMCP):
             rainfall_values = _calculate_average_rainfall(rainfall_api_result, hours_diff)
             logger.info(f"计算得到等时段面雨量值: {rainfall_values[:5]}...（共{len(rainfall_values)}个时段）")
             
-            ctrl_params = control_params if control_params else _build_control_params()
+            ctrl_params = _build_control_params(station_config, custom_params)
             rainfall_data = _build_rainfall_data(rainfall_values, start_time, end_time)
             etp_data = _build_etp_data(len(rainfall_values), start_time, end_time)
             
@@ -695,6 +751,13 @@ def register_forecast_models(mcp: FastMCP):
                         "success": True,
                         "message": "新安江模型运行成功",
                         "command": "FUNC_RUN_XINANJIANG_MODEL",
+                        "station_info": {
+                            "station_name": station_name,
+                            "station_type": station_type,
+                            "station_code": station_code,
+                            "basin_name": basin_name,
+                            "basin_area": basin_area
+                        },
                         "result": {
                             "start_time": start_time_result,
                             "end_time": end_time_result,
