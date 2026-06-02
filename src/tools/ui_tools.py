@@ -663,9 +663,9 @@ def register_ui_tools(mcp: FastMCP):
         markers: list,
         session_id: str = None
     ) -> dict:
-        """在GIS场景中高亮显示告警站点。
+        """在页面中高亮显示告警站点。
 
-        当水位或流量超警时，调用此工具在GIS场景中以醒目颜色高亮对应水库或水文站站点，
+        当水位或流量超警时，调用此工具在页面中以醒目颜色高亮对应水库或水文站站点，
         便于决策者直观判断当前险情分布。
 
         Args:
@@ -679,14 +679,18 @@ def register_ui_tools(mcp: FastMCP):
                     "threshold": 285.43,        // 阈值（水位：汛限/校核水位；流量：预警流量）
                     "level": "red"              // 告警级别：red（红色/超校核）、orange（橙色/超汛限）、yellow（黄色/超预警）
                 }
-                如果当前无任何告警，传入空列表 []，场景中将清除所有告警高亮。
+                如果当前无任何告警，传入空列表 []，页面中将清除所有告警高亮。
             session_id: 目标 session_id（可选），如果不指定，则广播到所有连接
 
         Returns:
             发送高亮指令的确认信息
         """
         logger.info(f"调用 highlight_warnings，收到参数: markers={len(markers)} 个, session_id={repr(session_id)}")
-        result = await scene_connector.send_warning_highlight_async(markers, target_session=session_id)
+        data = {
+            "markers": markers,
+            "action": "show"
+        }
+        result = await send_ui_command_async("FUNC_WARNING_HIGHLIGHT", data, session_id=session_id)
         warning_count = len(markers)
         red_count = sum(1 for m in markers if m.get("level") == "red")
         orange_count = sum(1 for m in markers if m.get("level") == "orange")
@@ -699,7 +703,7 @@ def register_ui_tools(mcp: FastMCP):
                 "orange": orange_count,
                 "yellow": yellow_count
             },
-            "message": f"GIS告警高亮已更新：{warning_count} 个站点（红色{red_count}、橙色{orange_count}、黄色{yellow_count}）",
+            "message": f"告警高亮已更新：{warning_count} 个站点（红色{red_count}、橙色{orange_count}、黄色{yellow_count}）",
             "command": "FUNC_WARNING_HIGHLIGHT",
             "response": result
         }
@@ -711,7 +715,7 @@ def register_ui_tools(mcp: FastMCP):
         marker_ids: list = None,
         session_id: str = None
     ) -> dict:
-        """清除GIS场景中的告警高亮。
+        """清除页面中的告警高亮。
 
         Args:
             marker_ids: 要清除的站点编码列表，如 ["BDA00000761", "40104360"]，
@@ -722,7 +726,11 @@ def register_ui_tools(mcp: FastMCP):
             发送清除指令的确认信息
         """
         logger.info(f"调用 clear_warning_highlights，收到参数: marker_ids={repr(marker_ids)}, session_id={repr(session_id)}")
-        result = await scene_connector.clear_warning_highlight_async(marker_ids, target_session=session_id)
+        data = {
+            "action": "clear",
+            "marker_ids": marker_ids
+        }
+        result = await send_ui_command_async("FUNC_WARNING_HIGHLIGHT", data, session_id=session_id)
         return_value = {
             "success": True,
             "cleared_ids": marker_ids,
@@ -738,9 +746,9 @@ def register_ui_tools(mcp: FastMCP):
         village_ids: list,
         session_id: str = None
     ) -> dict:
-        """在GIS场景中显示撤离转移路线标注。
+        """在页面中显示撤离转移路线标注。
 
-        根据村庄ID列表，从数据库查询转移路线数据后发送到GIS场景标注。
+        根据村庄ID列表，从数据库查询转移路线数据后发送到页面标注。
 
         Args:
             village_ids: 村庄ID列表，如 [123, 456, 789]。
@@ -754,8 +762,12 @@ def register_ui_tools(mcp: FastMCP):
         logger.info(f"调用 show_evacuation_routes，收到 village_ids: {village_ids}, session_id={repr(session_id)}")
 
         if not village_ids:
-            result = await scene_connector.clear_evacuation_routes_async(target_session=session_id)
-            return {"success": True, "route_count": 0, "message": "已清除全部转移路线标注"}
+            data = {
+                "action": "clear",
+                "route_ids": None
+            }
+            result = await send_ui_command_async("FUNC_EVACUATION_ROUTE_SHOW", data, session_id=session_id)
+            return {"success": True, "route_count": 0, "message": "已清除全部转移路线标注", "response": result}
 
         placeholders = ','.join('?' * len(village_ids))
         from src.services.database.connection import get_db
@@ -794,11 +806,15 @@ def register_ui_tools(mcp: FastMCP):
                     "contact_phone": row.get('contact_phone', ''),
                 })
 
-        result = await scene_connector.send_evacuation_routes_async(routes, target_session=session_id)
+        data = {
+            "routes": routes,
+            "action": "show"
+        }
+        result = await send_ui_command_async("FUNC_EVACUATION_ROUTE_SHOW", data, session_id=session_id)
         return_value = {
             "success": True,
             "route_count": len(routes),
-            "message": f"已发送 {len(routes)} 条转移路线标注到GIS场景",
+            "message": f"已发送 {len(routes)} 条转移路线标注到页面",
             "command": "FUNC_EVACUATION_ROUTE_SHOW",
             "response": result
         }
@@ -810,7 +826,7 @@ def register_ui_tools(mcp: FastMCP):
         route_ids: list = None,
         session_id: str = None
     ) -> dict:
-        """清除GIS场景中的转移路线标注。
+        """清除页面中的转移路线标注。
 
         Args:
             route_ids: 要清除的路线ID列表，如 ["village_1", "village_2"]，
@@ -821,7 +837,11 @@ def register_ui_tools(mcp: FastMCP):
             发送清除指令的确认信息
         """
         logger.info(f"调用 clear_evacuation_routes，收到参数: route_ids={repr(route_ids)}, session_id={repr(session_id)}")
-        result = await scene_connector.clear_evacuation_routes_async(route_ids, target_session=session_id)
+        data = {
+            "action": "clear",
+            "route_ids": route_ids
+        }
+        result = await send_ui_command_async("FUNC_EVACUATION_ROUTE_SHOW", data, session_id=session_id)
         return_value = {
             "success": True,
             "cleared_ids": route_ids,
