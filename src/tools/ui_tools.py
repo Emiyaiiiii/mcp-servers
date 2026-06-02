@@ -549,25 +549,9 @@ def register_ui_tools(mcp: FastMCP):
         except Exception as e:
             logger.warning(f"生成孔洞开启方案失败: {e}")
 
-        scheme_details = {
-            "scheme_id": scheme.get("scheme_id", scheme_id),
-            "scheme_name": scheme.get("scheme_name", ""),
-            "description": scheme.get("description", ""),
-            "basin": scheme.get("basin", ""),
-            "start_date": scheme.get("start_date", ""),
-            "end_date": scheme.get("end_date", ""),
-            "constraints": scheme.get("constraints", []),
-            "details": scheme.get("details", []),
-            "constraints_applied": scheme.get("constraints_applied", {}),
-            "original_scheme": scheme,
-            "reservoir_schemes": reservoir_schemes
-        }
-
         data = {
             "task_id": task_id,
-            "scheme_id": scheme_id,
             "scheme": scheme,
-            "scheme_details": scheme_details,
             "reservoir_schemes": reservoir_schemes,
             "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -581,7 +565,7 @@ def register_ui_tools(mcp: FastMCP):
             "scheme_name": scheme.get("scheme_name", ""),
             "message": "预演指令已发送",
             "command": "FUNC_UI_START_SIMULATION",
-            "scheme_details": scheme_details,
+            "scheme": scheme,
             "reservoir_schemes": reservoir_schemes
         }
         logger.debug(f"send_simulation_command 返回结果: {return_value}")

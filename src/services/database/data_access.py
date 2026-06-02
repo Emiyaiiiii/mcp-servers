@@ -580,10 +580,16 @@ class SchemeAccess:
                     levels = [t['water_level'] for t in timeseries if t.get('water_level') is not None]
                     inflows = [t['inflow'] for t in timeseries if t.get('inflow') is not None]
                     outflows = [t['outflow'] for t in timeseries if t.get('outflow') is not None]
+                    storages = [t['storage'] for t in timeseries if t.get('storage') is not None]
+                    max_level = round(max(levels), 2) if levels else None
+                    max_inflow = round(max(inflows)) if inflows else None
+                    max_outflow = round(max(outflows)) if outflows else None
+                    max_storage = round(max(storages), 2) if storages else None
                     avg_level = round(sum(levels) / len(levels), 2) if levels else None
                     avg_inflow = round(sum(inflows) / len(inflows), 2) if inflows else None
                     avg_outflow = round(sum(outflows) / len(outflows), 2) if outflows else None
                 else:
+                    max_level = max_inflow = max_outflow = max_storage = None
                     avg_level = avg_inflow = avg_outflow = None
                 sql = """
                     INSERT INTO scheme_reservoirs (
@@ -596,10 +602,10 @@ class SchemeAccess:
                     scheme_id,
                     res_code,
                     json.dumps(timeseries),
-                    res_data.get('max_level'),
-                    res_data.get('max_inflow'),
-                    res_data.get('max_outflow'),
-                    res_data.get('max_storage'),
+                    max_level,
+                    max_inflow,
+                    max_outflow,
+                    max_storage,
                     avg_level,
                     avg_inflow,
                     avg_outflow,
@@ -614,9 +620,10 @@ class SchemeAccess:
                 timeseries = station_data.get('timeseries', [])
                 if timeseries:
                     flows = [t['flow'] for t in timeseries if t.get('flow') is not None]
+                    max_flow = round(max(flows)) if flows else None
                     avg_flow = round(sum(flows) / len(flows), 2) if flows else None
                 else:
-                    avg_flow = None
+                    max_flow = avg_flow = None
                 sql = """
                     INSERT INTO scheme_stations (
                         scheme_id, station_code, timeseries,
@@ -627,7 +634,7 @@ class SchemeAccess:
                     scheme_id,
                     station_code,
                     json.dumps(timeseries),
-                    station_data.get('max_flow'),
+                    max_flow,
                     avg_flow,
                 ))
         
@@ -657,12 +664,16 @@ class SchemeAccess:
         result['reservoirs'] = {}
         for r in reservoirs:
             res_data = {
-                'timeseries': json.loads(r['timeseries']) if r['timeseries'] else [],
-                'max_level': r['max_level'],
-                'max_inflow': r['max_inflow'],
-                'max_outflow': r['max_outflow'],
-                'max_storage': r['max_storage']
+                'timeseries': json.loads(r['timeseries']) if r['timeseries'] else []
             }
+            if r['max_level'] is not None:
+                res_data['max_level'] = r['max_level']
+            if r['max_inflow'] is not None:
+                res_data['max_inflow'] = r['max_inflow']
+            if r['max_outflow'] is not None:
+                res_data['max_outflow'] = r['max_outflow']
+            if r['max_storage'] is not None:
+                res_data['max_storage'] = r['max_storage']
             result['reservoirs'][r['reservoir_code']] = res_data
         
         stations_sql = """
@@ -672,10 +683,12 @@ class SchemeAccess:
         result['hydrological_stations'] = {}
         for s in stations:
             station_data = {
-                'timeseries': json.loads(s['timeseries']) if s['timeseries'] else [],
-                'max_flow': s['max_flow'],
-                'max_level': s['max_level']
+                'timeseries': json.loads(s['timeseries']) if s['timeseries'] else []
             }
+            if s['max_flow'] is not None:
+                station_data['max_flow'] = s['max_flow']
+            if s['max_level'] is not None:
+                station_data['max_level'] = s['max_level']
             result['hydrological_stations'][s['station_code']] = station_data
         
         return result

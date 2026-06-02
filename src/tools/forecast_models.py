@@ -134,84 +134,23 @@ def register_forecast_models(mcp: FastMCP):
 
     @mcp.tool()
     async def generate_dispatch_scheme(
-        count: int = 1,
-        control_huayuankou_flow: bool = False,
-        huayuankou_max_flow: float = 2500.0,
-        flood_season_empty_storage: bool = False,
-        target_storage_ratio: float = 0.7,
-        smx_max_level: float = None,
-        smx_max_storage: float = None,
-        xld_max_level: float = None,
-        xld_max_storage: float = None,
-        lh_max_level: float = None,
-        lh_max_storage: float = None,
-        gx_max_level: float = None,
-        gx_max_storage: float = None,
-        hkc_max_level: float = None,
-        hkc_max_storage: float = None,
         start_time: str = None
     ) -> dict:
         """
         生成调度方案单。
 
+        从数据库中读取真实的调度方案时间序列数据，生成标准格式的调度方案单，
+        并自动保存到调度方案存储中，供后续预演和预案生成使用。
+
         Args:
-            count: 生成的调度方案数量，默认1个
-            control_huayuankou_flow: 是否控制花园口流量
-            huayuankou_max_flow: 花园口最大流量限制（m³/s），默认2500
-            flood_season_empty_storage: 是否需要汛前腾空库容
-            target_storage_ratio: 汛前目标库容比例，默认0.7（70%）
-            
-            # 三门峡水库约束
-            smx_max_level: 三门峡水库最大水位限制（m），不设置则无限制
-            smx_max_storage: 三门峡水库最大库容限制（亿m³），不设置则无限制
-            
-            # 小浪底水库约束
-            xld_max_level: 小浪底水库最大水位限制（m），不设置则无限制
-            xld_max_storage: 小浪底水库最大库容限制（亿m³），不设置则无限制
-            
-            # 陆浑水库约束
-            lh_max_level: 陆浑水库最大水位限制（m），不设置则无限制
-            lh_max_storage: 陆浑水库最大库容限制（亿m³），不设置则无限制
-            
-            # 故县水库约束
-            gx_max_level: 故县水库最大水位限制（m），不设置则无限制
-            gx_max_storage: 故县水库最大库容限制（亿m³），不设置则无限制
-            
-            # 河口村水库约束
-            hkc_max_level: 河口村水库最大水位限制（m），不设置则无限制
-            hkc_max_storage: 河口村水库最大库容限制（亿m³），不设置则无限制
-            
-            start_time: 调度开始时间（格式：YYYY-MM-DD），不设置则使用当前时间
+            start_time: 调度开始时间（格式：YYYY-MM-DD），当前仅支持2021年汛期数据（2021-10-02~2021-10-07）
         """
-        logger.info(f"调用 generate_dispatch_scheme，收到参数: count={count}, control_huayuankou_flow={control_huayuankou_flow}, huayuankou_max_flow={huayuankou_max_flow}, flood_season_empty_storage={flood_season_empty_storage}, target_storage_ratio={target_storage_ratio}")
+        logger.info(f"调用 generate_dispatch_scheme，收到参数: start_time={repr(start_time)}")
         
         import time
         from datetime import datetime, timedelta
-        
-        # 确定请求的日期范围
-        if start_time:
-            try:
-                base_datetime = datetime.strptime(start_time, "%Y-%m-%d")
-            except ValueError:
-                base_datetime = datetime.now()
-        else:
-            base_datetime = datetime.now()
-        
-        # 定义允许的时间范围：2021年10月2日到10月7日
-        allowed_start = datetime(2021, 10, 2)
-        allowed_end = datetime(2021, 10, 7)
-        
-        # 检查请求的时间是否在允许范围内
-        if not (allowed_start <= base_datetime <= allowed_end):
-            return {
-                "success": False,
-                "command": "FUNC_GENERATE_DISPATCH_SCHEME",
-                "message": "目前没有接入五库调度模型，因此无法生成调度方案单"
-            }
-        
         from src.services.database.data_access import DispatchTimeseriesAccess
         
-        # 从数据库获取调度方案数据
         try:
             schemes = DispatchTimeseriesAccess.get_all_schemes()
             if not schemes:
@@ -219,28 +158,23 @@ def register_forecast_models(mcp: FastMCP):
                 return {
                     "success": False,
                     "command": "FUNC_GENERATE_DISPATCH_SCHEME",
-                    "message": "目前没有接入五库调度模型，因此无法生成调度方案单"
+                    "message": "数据库中未找到调度方案数据，请确认种子数据已导入"
                 }
             
-            # 获取第一个方案的 ID
-            scheme_id = schemes[0]['id']
-            
-            # 获取所有时间序列数据
-            timeseries_data = DispatchTimeseriesAccess.get_timeseries(scheme_id)
+            dispatch_scheme = schemes[0]
+            timeseries_data = DispatchTimeseriesAccess.get_timeseries(dispatch_scheme['id'])
             
             if not timeseries_data:
-                logger.warning(f"调度方案 {scheme_id} 中没有时间序列数据")
+                logger.warning(f"调度方案 {dispatch_scheme['id']} 中没有时间序列数据")
                 return {
                     "success": False,
                     "command": "FUNC_GENERATE_DISPATCH_SCHEME",
-                    "message": "目前没有接入五库调度模型，因此无法生成调度方案单"
+                    "message": "数据库中未找到调度方案时间序列数据"
                 }
             
-            # 按站点和指标类型组织数据
             reservoirs = {}
             hydrological_stations = {}
             
-            # 站点名称映射和站点编码映射
             station_name_map = {
                 "三门峡": "三门峡水库",
                 "小浪底": "小浪底水库",
@@ -249,7 +183,6 @@ def register_forecast_models(mcp: FastMCP):
                 "河口村": "河口村水库"
             }
             
-            # 水库站点编码映射
             station_code_map = {
                 "三门峡": "BDA00000111",
                 "小浪底": "BDA00000121",
@@ -258,7 +191,6 @@ def register_forecast_models(mcp: FastMCP):
                 "河口村": "BDA00000761"
             }
             
-            # 指标类型映射
             metric_type_map = {
                 "level": "water_level",
                 "storage": "storage",
@@ -267,7 +199,6 @@ def register_forecast_models(mcp: FastMCP):
                 "flow": "flow"
             }
             
-            # 按时间戳分组，每个站点保留所有指标记录
             time_groups = {}
             for record in timeseries_data:
                 ts = record['timestamp']
@@ -275,31 +206,26 @@ def register_forecast_models(mcp: FastMCP):
                     time_groups[ts] = {}
                 time_groups[ts].setdefault(record['station_name'], []).append(record)
             
-            # 初始化水库数据结构
             for station_name, res_name in station_name_map.items():
                 reservoirs[res_name] = {
                     "station_code": station_code_map.get(station_name, ""),
                     "timeseries": []
                 }
             
-            # 初始化水文站数据结构
             common_stations = ["龙门镇", "白马寺", "黑石关", "花园口"]
             for station in common_stations:
                 hydrological_stations[station] = {
                     "timeseries": []
                 }
             
-            # 按时间顺序处理
             for ts in sorted(time_groups.keys()):
                 group = time_groups[ts]
                 
-                # 格式化时间戳为毫秒
                 if hasattr(ts, 'timestamp'):
                     formatted_ts = int(ts.timestamp() * 1000)
                 else:
                     formatted_ts = int(time.mktime(time.strptime(str(ts), "%Y-%m-%d %H:%M:%S")) * 1000)
                 
-                # 处理水库数据
                 for station_name, res_name in station_name_map.items():
                     records = group.get(station_name, [])
                     res_data = {
@@ -313,17 +239,22 @@ def register_forecast_models(mcp: FastMCP):
                     for record in records:
                         metric = metric_type_map.get(record['metric_type'])
                         if metric and metric in res_data:
-                            res_data[metric] = record['metric_value']
+                            raw_value = record['metric_value']
+                            if raw_value is not None:
+                                if metric in ('water_level', 'storage'):
+                                    res_data[metric] = round(raw_value, 2)
+                                else:
+                                    res_data[metric] = round(raw_value)
                     
                     reservoirs[res_name]["timeseries"].append(res_data)
                 
-                # 处理水文站数据
                 for station in common_stations:
                     station_records = group.get(station, [])
                     flow_value = None
                     for record in station_records:
                         if record['metric_type'] == 'flow':
-                            flow_value = record['metric_value']
+                            raw_value = record['metric_value']
+                            flow_value = round(raw_value) if raw_value is not None else None
                             break
                     
                     hydrological_stations[station]["timeseries"].append({
@@ -331,17 +262,23 @@ def register_forecast_models(mcp: FastMCP):
                         "flow": flow_value
                     })
             
-            # 构建返回的方案
-            result_scheme = {
-                "scheme_id": schemes[0].get('id', 'DS-0001'),
-                "scheme_name": schemes[0].get('name', '2021年汛期调度方案'),
+            scheme_data = {
+                "scheme_name": dispatch_scheme.get('name', '2021年汛期调度方案'),
+                "description": "基于2021年汛期实测数据的调度方案",
+                "basin": "黄河",
                 "start_date": "2021-10-02",
                 "end_date": "2021-10-07",
+                "status": "active",
+                "constraints": [],
+                "details": [],
+                "constraints_applied": {},
                 "reservoirs": reservoirs,
                 "hydrological_stations": hydrological_stations
             }
+
+            saved_scheme_id = save_scheme(scheme_data)
+            logger.info(f"调度方案已保存，ID: {saved_scheme_id}")
             
-            # 计算方案摘要统计
             def calculate_scheme_summary(scheme):
                 stats = {}
                 for res_name, res_data in scheme['reservoirs'].items():
@@ -367,32 +304,22 @@ def register_forecast_models(mcp: FastMCP):
                 return stats
             
             schemes_summary = [{
-                "scheme_id": result_scheme['scheme_id'],
-                "scheme_name": result_scheme['scheme_name'],
-                "start_date": result_scheme['start_date'],
-                "end_date": result_scheme['end_date'],
-                "stats": calculate_scheme_summary(result_scheme)
+                "scheme_id": saved_scheme_id,
+                "scheme_name": scheme_data['scheme_name'],
+                "start_date": scheme_data['start_date'],
+                "end_date": scheme_data['end_date'],
+                "stats": calculate_scheme_summary(scheme_data)
             }]
             
             return_value = {
                 "success": True,
                 "command": "FUNC_GENERATE_DISPATCH_SCHEME",
-                "count": 1,
-                "constraints_applied": {
-                    "control_huayuankou_flow": control_huayuankou_flow,
-                    "huayuankou_max_flow": huayuankou_max_flow if control_huayuankou_flow else None,
-                    "flood_season_empty_storage": flood_season_empty_storage,
-                    "target_storage_ratio": target_storage_ratio if flood_season_empty_storage else None,
-                    "reservoir_constraints": {
-                        "三门峡水库": {"max_level": smx_max_level, "max_storage": smx_max_storage},
-                        "小浪底水库": {"max_level": xld_max_level, "max_storage": xld_max_storage},
-                        "陆浑水库": {"max_level": lh_max_level, "max_storage": lh_max_storage},
-                        "故县水库": {"max_level": gx_max_level, "max_storage": gx_max_storage},
-                        "河口村水库": {"max_level": hkc_max_level, "max_storage": hkc_max_storage}
-                    }
-                },
+                "scheme_id": saved_scheme_id,
+                "scheme_name": scheme_data['scheme_name'],
+                "start_date": scheme_data['start_date'],
+                "end_date": scheme_data['end_date'],
                 "schemes_summary": schemes_summary,
-                "schemes": [result_scheme],
+                "schemes": [scheme_data],
                 "message": "成功获取调度方案单"
             }
             
@@ -404,7 +331,7 @@ def register_forecast_models(mcp: FastMCP):
             return {
                 "success": False,
                 "command": "FUNC_GENERATE_DISPATCH_SCHEME",
-                "message": "目前没有接入五库调度模型，因此无法生成调度方案单"
+                "message": f"获取调度方案失败: {str(e)}"
             }
 
     @mcp.tool()
