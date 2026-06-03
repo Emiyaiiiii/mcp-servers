@@ -147,8 +147,6 @@ def register_forecast_models(mcp: FastMCP):
         """
         logger.info(f"调用 generate_dispatch_scheme，收到参数: start_time={repr(start_time)}")
         
-        import time
-        from datetime import datetime, timedelta
         from src.services.database.data_access import DispatchTimeseriesAccess
         
         try:
@@ -220,47 +218,38 @@ def register_forecast_models(mcp: FastMCP):
             
             for ts in sorted(time_groups.keys()):
                 group = time_groups[ts]
-                
-                if hasattr(ts, 'timestamp'):
-                    formatted_ts = int(ts.timestamp() * 1000)
-                else:
-                    formatted_ts = int(time.mktime(time.strptime(str(ts), "%Y-%m-%d %H:%M:%S")) * 1000)
+                formatted_ts = str(ts)
                 
                 for station_name, res_name in station_name_map.items():
                     records = group.get(station_name, [])
-                    res_data = {
-                        "time": formatted_ts,
-                        "water_level": None,
-                        "storage": None,
-                        "inflow": None,
-                        "outflow": None
-                    }
+                    res_data = {"time": formatted_ts}
+                    has_value = False
                     
                     for record in records:
                         metric = metric_type_map.get(record['metric_type'])
-                        if metric and metric in res_data:
+                        if metric:
                             raw_value = record['metric_value']
                             if raw_value is not None:
+                                has_value = True
                                 if metric in ('water_level', 'storage'):
                                     res_data[metric] = round(raw_value, 2)
                                 else:
                                     res_data[metric] = round(raw_value)
                     
-                    reservoirs[res_name]["timeseries"].append(res_data)
+                    if has_value:
+                        reservoirs[res_name]["timeseries"].append(res_data)
                 
                 for station in common_stations:
                     station_records = group.get(station, [])
-                    flow_value = None
                     for record in station_records:
                         if record['metric_type'] == 'flow':
                             raw_value = record['metric_value']
-                            flow_value = round(raw_value) if raw_value is not None else None
+                            if raw_value is not None:
+                                hydrological_stations[station]["timeseries"].append({
+                                    "time": formatted_ts,
+                                    "flow": round(raw_value)
+                                })
                             break
-                    
-                    hydrological_stations[station]["timeseries"].append({
-                        "time": formatted_ts,
-                        "flow": flow_value
-                    })
             
             scheme_data = {
                 "scheme_name": dispatch_scheme.get('name', '2021年汛期调度方案'),
@@ -282,10 +271,10 @@ def register_forecast_models(mcp: FastMCP):
             def calculate_scheme_summary(scheme):
                 stats = {}
                 for res_name, res_data in scheme['reservoirs'].items():
-                    levels = [t['water_level'] for t in res_data['timeseries'] if t['water_level'] is not None]
-                    storages = [t['storage'] for t in res_data['timeseries'] if t['storage'] is not None]
-                    inflows = [t['inflow'] for t in res_data['timeseries'] if t['inflow'] is not None]
-                    outflows = [t['outflow'] for t in res_data['timeseries'] if t['outflow'] is not None]
+                    levels = [t['water_level'] for t in res_data['timeseries'] if t.get('water_level') is not None]
+                    storages = [t['storage'] for t in res_data['timeseries'] if t.get('storage') is not None]
+                    inflows = [t['inflow'] for t in res_data['timeseries'] if t.get('inflow') is not None]
+                    outflows = [t['outflow'] for t in res_data['timeseries'] if t.get('outflow') is not None]
                     
                     stats[res_name] = {
                         "water_level_range": [round(min(levels), 2) if levels else None, round(max(levels), 2) if levels else None],
@@ -295,7 +284,7 @@ def register_forecast_models(mcp: FastMCP):
                     }
                 
                 if '花园口' in scheme['hydrological_stations']:
-                    huayuankou_flows = [t['flow'] for t in scheme['hydrological_stations']['花园口']['timeseries'] if t['flow'] is not None]
+                    huayuankou_flows = [t['flow'] for t in scheme['hydrological_stations']['花园口']['timeseries'] if t.get('flow') is not None]
                     stats['花园口'] = {
                         "flow_range": [round(min(huayuankou_flows), 2) if huayuankou_flows else None, round(max(huayuankou_flows), 2) if huayuankou_flows else None],
                         "avg_flow": round(sum(huayuankou_flows) / len(huayuankou_flows), 2) if huayuankou_flows else None
