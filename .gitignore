@@ -39,3 +39,5 @@ dist/
 Thumbs.db
 
 data/.auth_token.json
+data/
+storage/
