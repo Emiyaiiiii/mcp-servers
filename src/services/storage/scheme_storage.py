@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
-from src.services.database.data_access import SchemeAccess
-from src.services.database.init_database import init_database
+from src.services.storage.database.data_access import SchemeAccess
+from src.services.storage.database.init_database import init_database
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -15,7 +15,7 @@ def generate_unique_id() -> str:
     Returns:
         格式为 DS-XXXX 的唯一ID
     """
-    from src.services.database.connection import get_db
+    from src.services.storage.database.connection import get_db
     
     sql = """
         SELECT MAX(CAST(SUBSTR(scheme_id, 4) AS INTEGER)) as max_id 

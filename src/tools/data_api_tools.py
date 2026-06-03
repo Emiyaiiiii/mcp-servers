@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 from mcp.server.fastmcp import FastMCP
 from src.config.settings import settings
 from src.utils.station_codes import get_reservoir_code, get_station_code, get_reservoir_station_code
-from src.services.auth_service import auth_service
+from src.services.external_api.auth_service import auth_service
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -166,10 +166,9 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到雨量站: {station}"}
-            logger.debug(f"get_rainfall_station_info 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/rainfall/psta/get/{station_code}"
-        result = _get(url)
+        else:
+            url = f"{BASE_URL}/rainfall/psta/get/{station_code}"
+            result = _get(url)
         logger.debug(f"get_rainfall_station_info 返回结果: {result}")
         return result
 
@@ -243,15 +242,14 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到雨量站: {station}"}
-            logger.debug(f"get_daily_rainfall_stats 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/rainfall/dayrt/getRainfall"
-        params = {
-            "stcd": station_code,
-            "startDate": start_date,
-            "endDate": end_date
-        }
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/rainfall/dayrt/getRainfall"
+            params = {
+                "stcd": station_code,
+                "startDate": start_date,
+                "endDate": end_date
+            }
+            result = _get(url, params)
         logger.debug(f"get_daily_rainfall_stats 返回结果: {result}")
         return result
 
@@ -330,11 +328,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_river_station_info 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/qsta/get"
-        params = {"hysta": station_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/qsta/get"
+            params = {"hysta": station_code}
+            result = _get(url, params)
         logger.debug(f"get_river_station_info 返回结果: {result}")
         return result
 
@@ -410,11 +407,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"list_design_flood_results 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/flood/list"
-        params = {"hysta": station_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/flood/list"
+            params = {"hysta": station_code}
+            result = _get(url, params)
         logger.debug(f"list_design_flood_results 返回结果: {result}")
         return result
 
@@ -458,11 +454,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_hydrological_features 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/hystatis/get"
-        params = {"hysta": station_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/hystatis/get"
+            params = {"hysta": station_code}
+            result = _get(url, params)
         logger.debug(f"get_hydrological_features 返回结果: {result}")
         return result
 
@@ -498,11 +493,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"list_water_level_sections 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/tyflood/floods"
-        params = {"flcd": season_code, "stcd": station_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/tyflood/floods"
+            params = {"flcd": season_code, "stcd": station_code}
+            result = _get(url, params)
         logger.debug(f"list_water_level_sections 返回结果: {result}")
         return result
 
@@ -540,11 +534,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"list_realtime_hydrology 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/hourrt/list"
-        params = {"hysta": station_code, "startDate": start_date, "endDate": end_date}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/hourrt/list"
+            params = {"hysta": station_code, "startDate": start_date, "endDate": end_date}
+            result = _get(url, params)
         logger.debug(f"list_realtime_hydrology 返回结果: {result}")
         return result
 
@@ -566,11 +559,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"list_daily_hydrology 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/dayrt/list"
-        params = {"hysta": station_code, "startDate": start_date, "endDate": end_date}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/dayrt/list"
+            params = {"hysta": station_code, "startDate": start_date, "endDate": end_date}
+            result = _get(url, params)
         logger.debug(f"list_daily_hydrology 返回结果: {result}")
         return result
 
@@ -670,11 +662,10 @@ def register_data_api_tools(mcp: FastMCP):
         reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"get_reservoir_features 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/project/resv/get"
-        params = {"resname": reservoir_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/project/resv/get"
+            params = {"resname": reservoir_code}
+            result = _get(url, params)
         logger.debug(f"get_reservoir_features 返回结果: {result}")
         return result
 
@@ -706,11 +697,10 @@ def register_data_api_tools(mcp: FastMCP):
         reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"list_reservoir_level_capacity 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/project/resvzv/list"
-        params = {"resname": reservoir_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/project/resvzv/list"
+            params = {"resname": reservoir_code}
+            result = _get(url, params)
         logger.debug(f"list_reservoir_level_capacity 返回结果: {result}")
         return result
 
@@ -759,11 +749,10 @@ def register_data_api_tools(mcp: FastMCP):
         reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"list_reservoir_features 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/project/rprop/list"
-        params = {"ennmcd": reservoir_code}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/project/rprop/list"
+            params = {"ennmcd": reservoir_code}
+            result = _get(url, params)
         logger.debug(f"list_reservoir_features 返回结果: {result}")
         return result
 
@@ -802,11 +791,10 @@ def register_data_api_tools(mcp: FastMCP):
         reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"get_reservoir_realtime 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/rhourrt/list"
-        params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/rhourrt/list"
+            params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
+            result = _get(url, params)
         logger.debug(f"get_reservoir_realtime 返回结果: {result}")
         return result
 
@@ -1026,15 +1014,14 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_hydrological_extreme 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/hourrt/getPeakValue"
-        params = {
-            "hysta": station_code,
-            "staDate": start_date,
-            "endDate": end_date
-        }
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/hourrt/getPeakValue"
+            params = {
+                "hysta": station_code,
+                "staDate": start_date,
+                "endDate": end_date
+            }
+            result = _get(url, params)
         logger.debug(f"get_hydrological_extreme 返回结果: {result}")
         return result
 
@@ -1068,11 +1055,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_hydrological_same_period 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/dayrt/getSameValue"
-        params = {"hysta": station_code, "date": date}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/dayrt/getSameValue"
+            params = {"hysta": station_code, "date": date}
+            result = _get(url, params)
         logger.debug(f"get_hydrological_same_period 返回结果: {result}")
         return result
 
@@ -1109,11 +1095,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_hydrological_historical_same_period 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/hourrt/getSameValue"
-        params = {"hysta": station_code, "staDay": start_day, "endDay": end_day}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/hourrt/getSameValue"
+            params = {"hysta": station_code, "staDay": start_day, "endDay": end_day}
+            result = _get(url, params)
         logger.debug(f"get_hydrological_historical_same_period 返回结果: {result}")
         return result
 
@@ -1150,11 +1135,10 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_hydrological_yearly_extreme 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/hourrt/getYearPeakValue"
-        params = {"hysta": station_code, "staDate": start_date, "endDate": end_date}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/hourrt/getYearPeakValue"
+            params = {"hysta": station_code, "staDate": start_date, "endDate": end_date}
+            result = _get(url, params)
         logger.debug(f"get_hydrological_yearly_extreme 返回结果: {result}")
         return result
 
@@ -1287,11 +1271,10 @@ def register_data_api_tools(mcp: FastMCP):
         reservoir_code = _resolve_reservoir_for_api(reservoir)
         if not reservoir_code:
             result = {"code": 400, "data": None, "msg": f"未找到水库: {reservoir}"}
-            logger.debug(f"get_reservoir_period_comparison 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/resv/contrast"
-        params = {"resname": reservoir_code, "beforeDate": before_date, "afterDate": after_date}
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/resv/contrast"
+            params = {"resname": reservoir_code, "beforeDate": before_date, "afterDate": after_date}
+            result = _get(url, params)
         logger.debug(f"get_reservoir_period_comparison 返回结果: {result}")
         return result
 
@@ -1337,16 +1320,15 @@ def register_data_api_tools(mcp: FastMCP):
         station_code = _resolve_station(station)
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到水文站: {station}"}
-            logger.debug(f"get_river_period_comparison 返回结果: {result}")
-            return result
-        url = f"{BASE_URL}/hydrometric/psta/contrast"
-        params = {
-            "hysta": station_code,
-            "beforeDate": before_date,
-            "currentDate": current_date,
-            "afterDate": after_date
-        }
-        result = _get(url, params)
+        else:
+            url = f"{BASE_URL}/hydrometric/psta/contrast"
+            params = {
+                "hysta": station_code,
+                "beforeDate": before_date,
+                "currentDate": current_date,
+                "afterDate": after_date
+            }
+            result = _get(url, params)
         logger.debug(f"get_river_period_comparison 返回结果: {result}")
         return result
 
@@ -1460,7 +1442,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"query_flood_plan: keyword={keyword!r}, category={category!r}")
-        from src.services.database.data_access import (
+        from src.services.storage.database.data_access import (
             ReservoirAccess,
             FloodEvacuationPlanAccess,
             FloodControlMaterialAccess,
@@ -1540,7 +1522,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"query_evacuation: reservoir={reservoir_name}, village={village}, level={water_level}, township={township}")
-        from src.services.database.data_access import EvacuationQueryAccess
+        from src.services.storage.database.data_access import EvacuationQueryAccess
 
         if village:
             data = EvacuationQueryAccess.search_village(village)
@@ -1584,7 +1566,7 @@ def register_data_api_tools(mcp: FastMCP):
             }
         """
         logger.info(f"query_reservoir_info: {reservoir_name}, level={water_level}")
-        from src.services.database.data_access import EvacuationQueryAccess, ReservoirAccess
+        from src.services.storage.database.data_access import EvacuationQueryAccess, ReservoirAccess
 
         if not reservoir_name:
             return {"code": 400, "msg": "reservoir_name 必填", "data": {}}

@@ -1,6 +1,6 @@
 import json
 from typing import Optional, List, Dict
-from src.services.database.data_access import (
+from src.services.storage.database.data_access import (
     ReservoirAccess, HydrologyStationAccess, RainfallStationAccess, StationAliasAccess
 )
 from src.utils.logger import get_logger

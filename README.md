@@ -12,12 +12,22 @@ mcp-servers/
 │   │   ├── config.yaml     # 水库配置
 │   │   └── settings.py     # 环境变量配置
 │   ├── services/
-│   │   ├── scene_connector.py  # WebSocket场景连接器
-│   │   └── database/           # 数据库服务
-│   │       ├── connection.py   # 数据库连接管理
-│   │       ├── data_access.py  # 数据访问层
-│   │       ├── init_database.py # 数据库初始化
-│   │       └── config_loader.py # 动态配置加载器
+│   │   ├── communication/        # 通信服务
+│   │   │   ├── command_sender.py    # 统一消息发送服务
+│   │   │   ├── message_queue.py     # 消息队列
+│   │   │   └── websocket_manager.py # WebSocket连接管理
+│   │   ├── external_api/         # 外部 API 服务
+│   │   │   ├── auth_service.py          # 数据 API 认证
+│   │   │   ├── water_forecast_service.py # 来水预报 API
+│   │   │   ├── enhanced_search_service.py # 增强搜索 API
+│   │   │   └── xinanjiang_service.py    # 新安江模型 API
+│   │   └── storage/              # 存储服务
+│   │       ├── scheme_storage.py    # 调度方案存储
+│   │       └── database/            # 数据库服务
+│   │           ├── connection.py   # 数据库连接管理
+│   │           ├── data_access.py  # 数据访问层
+│   │           ├── init_database.py # 数据库初始化
+│   │           └── config_loader.py # 动态配置加载器
 │   ├── tools/
 │   │   ├── ui_tools.py         # UI页面跳转工具
 │   │   ├── data_api_tools.py   # 数据API工具

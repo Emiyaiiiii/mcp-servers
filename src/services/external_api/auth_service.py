@@ -23,7 +23,7 @@ class AuthService:
         self._session = requests.Session()
         
         # Token持久化文件路径
-        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', 'data', '.auth_token.json')
+        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.auth_token.json')
         
         # 初始化时尝试从文件加载token
         self._load_token_from_file()

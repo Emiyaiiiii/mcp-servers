@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 logger = get_logger(__name__)
 
@@ -25,7 +25,7 @@ class XinanjiangAuthService:
         self._app_secret = os.getenv('XINANJIANG_APP_SECRET', '7p899yn2gxf9dx9t430uqy1xwtkgo9p06o1h7quh7nm36wg8lj')
         self._session = requests.Session()
         
-        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', 'data', '.xinanjiang_token.json')
+        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.xinanjiang_token.json')
         
         self._load_token_from_file()
 

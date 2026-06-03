@@ -3,7 +3,7 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-DATABASE_DIR = Path(__file__).parent.parent.parent.parent / "storage"
+DATABASE_DIR = Path(__file__).parent.parent.parent.parent.parent / "storage"
 DATABASE_PATH = DATABASE_DIR / "flood_control.db"
 
 def get_database_path() -> Path:

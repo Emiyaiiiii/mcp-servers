@@ -13,7 +13,7 @@ from src.tools.data_api_tools import register_data_api_tools
 from src.tools.forecast_models import register_forecast_models
 from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
-from src.services.websocket_manager import websocket_handler
+from src.services.communication.websocket_manager import websocket_handler
 
 
 def get_frontend_path():

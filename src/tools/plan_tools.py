@@ -6,10 +6,10 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from src.utils.logger import get_logger
 from src.tools.data_api_tools import _resolve_reservoir_for_api, _resolve_station
-from src.services.database.data_access import (
+from src.services.storage.database.data_access import (
     WaterLevelAccess, CoefficientAccess, HolePriorityAccess
 )
-from src.services.enhanced_search_service import enhanced_search_service
+from src.services.external_api.enhanced_search_service import enhanced_search_service
 
 logger = get_logger(__name__)
 

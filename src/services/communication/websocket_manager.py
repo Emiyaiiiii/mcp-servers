@@ -2,7 +2,7 @@ import json
 from typing import Optional, Dict, Any
 from starlette.websockets import WebSocket, WebSocketDisconnect
 from src.utils.logger import get_logger
-from src.services.message_queue import message_queue
+from src.services.communication.message_queue import message_queue
 
 logger = get_logger(__name__)
 
@@ -91,7 +91,6 @@ class WebSocketConnectionManager:
             if websocket:
                 try:
                     await websocket.send_text(message_str)
-                    logger.debug(f"📤 向 connection_id: {connection_id} 发送消息: {message_str[:100]}")
                 except Exception as e:
                     logger.error(f"❌ 向 connection_id: {connection_id} 发送消息失败: {e}", exc_info=True)
             else:
@@ -101,7 +100,6 @@ class WebSocketConnectionManager:
             for conn_id, websocket in list(self.active_connections.items()):
                 try:
                     await websocket.send_text(message_str)
-                    logger.debug(f"📤 向 connection_id: {conn_id} 发送消息: {message_str[:100]}")
                 except Exception as e:
                     logger.error(f"❌ 向 connection_id: {conn_id} 发送消息失败: {e}", exc_info=True)
     

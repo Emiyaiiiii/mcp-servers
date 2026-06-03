@@ -1,9 +1,12 @@
 import sqlite3
 from pathlib import Path
-from src.services.database import get_database_path
+from src.services.storage.database import get_database_path
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# 全局标志，确保数据库只初始化一次
+_database_initialized = False
 
 
 def init_database(force: bool = False):
@@ -12,6 +15,12 @@ def init_database(force: bool = False):
     Args:
         force: 是否强制重建数据库
     """
+    global _database_initialized
+    
+    # 如果已经初始化过且不强制重建，则跳过
+    if _database_initialized and not force:
+        return
+    
     db_path = get_database_path()
     sql_dir = Path(__file__).parent.parent.parent.parent / "sql"
     
@@ -19,6 +28,7 @@ def init_database(force: bool = False):
     
     if db_path.exists() and not force:
         logger.info("数据库已存在，跳过初始化")
+        _database_initialized = True
         return
     
     conn = sqlite3.connect(str(db_path))
@@ -52,11 +62,15 @@ def init_database(force: bool = False):
             logger.warning(f"SQL文件不存在: {sql_file}")
     
     conn.close()
+    _database_initialized = True
     logger.info("数据库初始化完成")
 
 
 def reset_database():
     """重置数据库"""
+    global _database_initialized
+    _database_initialized = False
+    
     db_path = get_database_path()
     if db_path.exists():
         db_path.unlink()

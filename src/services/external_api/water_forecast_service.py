@@ -25,7 +25,7 @@ class WaterForecastAuthService:
         # 禁用SSL证书验证
         self._session.verify = False
         
-        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', 'data', '.water_forecast_token.json')
+        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.water_forecast_token.json')
         
         self._load_token_from_file()
 

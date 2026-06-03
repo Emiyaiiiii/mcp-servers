@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from src.services.database.connection import get_db
+from src.services.storage.database.connection import get_db
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

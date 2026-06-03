@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 from src.utils.logger import get_logger
-from src.services.scheme_storage import save_scheme, generate_unique_id
-from src.services.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service
-from src.services.auth_service import auth_service
-from src.services.water_forecast_service import water_forecast_service
+from src.services.storage.scheme_storage import save_scheme, generate_unique_id
+from src.services.external_api.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service
+from src.services.external_api.auth_service import auth_service
+from src.services.external_api.water_forecast_service import water_forecast_service
 from src.utils.station_codes import get_reservoir_code, get_hydrology_code
 from src.config.settings import settings
 
@@ -147,7 +147,7 @@ def register_forecast_models(mcp: FastMCP):
         """
         logger.info(f"调用 generate_dispatch_scheme，收到参数: start_time={repr(start_time)}")
         
-        from src.services.database.data_access import DispatchTimeseriesAccess
+        from src.services.storage.database.data_access import DispatchTimeseriesAccess
         
         try:
             schemes = DispatchTimeseriesAccess.get_all_schemes()
@@ -373,7 +373,7 @@ def register_forecast_models(mcp: FastMCP):
         """
         logger.info(f"调用 run_xinanjiang_model，站点: {station_name}，时间范围: {start_time} 至 {end_time}")
         
-        from src.services.database.xinanjiang_config_access import XinanjiangModelConfigAccess
+        from src.services.storage.database.xinanjiang_config_access import XinanjiangModelConfigAccess
         
         station_config = XinanjiangModelConfigAccess.get_config_by_station(station_name)
         if not station_config:
