@@ -178,66 +178,117 @@ class WaterForecastService:
         # 禁用SSL证书验证
         self._session.verify = False
     
-    def get_reservoir_forecast(self, station_code: str, start_time: str, end_time: str) -> Dict[str, Any]:
-        """获取水库预报数据"""
-        try:
-            url = f"{self._base_url}/huangheApi/reservoir/xiaoyu/recordListByStationCode"
-            headers = {
-                **water_forecast_auth_service.get_auth_headers(),
-                "Content-Type": "application/json"
-            }
+    # def get_reservoir_forecast(self, station_code: str, start_time: str, end_time: str) -> Dict[str, Any]:
+    #     """获取水库预报数据"""
+    #     try:
+    #         url = f"{self._base_url}/huangheApi/reservoir/xiaoyu/recordListByStationCode"
+    #         headers = {
+    #             **water_forecast_auth_service.get_auth_headers(),
+    #             "Content-Type": "application/json"
+    #         }
             
-            params = {
-                "stationCode": station_code,
-                "startTime": start_time,
-                "endTime": end_time
-            }
+    #         params = {
+    #             "stationCode": station_code,
+    #             "startTime": start_time,
+    #             "endTime": end_time
+    #         }
             
-            logger.info(f"正在调用水库预报接口: {url}, 参数: {params}")
-            response = self._session.get(url, params=params, headers=headers, timeout=30)
+    #         logger.info(f"正在调用水库预报接口: {url}, 参数: {params}")
+    #         response = self._session.get(url, params=params, headers=headers, timeout=30)
             
-            logger.info(f"水库预报响应状态码: {response.status_code}")
-            logger.info(f"水库预报响应内容: {response.text}")
+    #         logger.info(f"水库预报响应状态码: {response.status_code}")
+    #         logger.info(f"水库预报响应内容: {response.text}")
             
-            response.raise_for_status()
+    #         response.raise_for_status()
             
-            result = response.json()
-            logger.info(f"水库预报接口返回成功")
-            return result
+    #         result = response.json()
+    #         logger.info(f"水库预报接口返回成功")
+    #         return result
                 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"水库预报请求异常: {e}")
-            return {"success": False, "error": str(e)}
+    #     except requests.exceptions.RequestException as e:
+    #         logger.error(f"水库预报请求异常: {e}")
+    #         return {"success": False, "error": str(e)}
     
-    def get_hydrology_forecast(self, station_code: str, start_time: str, end_time: str) -> Dict[str, Any]:
-        """获取水文站预报数据"""
+    # def get_hydrology_forecast(self, station_code: str, start_time: str, end_time: str) -> Dict[str, Any]:
+    #     """获取水文站预报数据"""
+    #     try:
+    #         url = f"{self._base_url}/huangheApi/hydrologyStation/xiaoyu/recordListByCode"
+    #         headers = {
+    #             **water_forecast_auth_service.get_auth_headers(),
+    #             "Content-Type": "application/json"
+    #         }
+            
+    #         params = {
+    #             "stationCode": station_code,
+    #             "startTime": start_time,
+    #             "endTime": end_time
+    #         }
+            
+    #         logger.info(f"正在调用水文站预报接口: {url}, 参数: {params}")
+    #         response = self._session.get(url, params=params, headers=headers, timeout=30)
+            
+    #         logger.info(f"水文站预报响应状态码: {response.status_code}")
+    #         logger.info(f"水文站预报响应内容: {response.text}")
+            
+    #         response.raise_for_status()
+            
+    #         result = response.json()
+    #         logger.info(f"水文站预报接口返回成功")
+    #         return result
+                
+    #     except requests.exceptions.RequestException as e:
+    #         logger.error(f"水文站预报请求异常: {e}")
+    #         return {"success": False, "error": str(e)}
+
+    def get_scheme_list(self, start_time: str, end_time: str) -> Dict[str, Any]:
+        """获取预报方案清单"""
         try:
-            url = f"{self._base_url}/huangheApi/hydrologyStation/xiaoyu/recordListByCode"
+            url = f"{self._base_url}/huangheApi/preSch/getRecommendedOrLatestSchList"
+            headers = {
+                **water_forecast_auth_service.get_auth_headers(),
+                "Content-Type": "application/json"
+            }
+            
+            response = self._session.get(url, headers=headers, timeout=30)
+            
+            
+            response.raise_for_status()
+            
+            result = response.json()
+            return result
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"获取预报方案清单请求异常: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_scheme_data_by_station_name(self, sch_id: str, station_name: str) -> Dict[str, Any]:
+        """根据方案ID和站点名称获取预报数据"""
+        try:
+            url = f"{self._base_url}/huangheApi/preSch/getRecommendSchDataByStationName"
             headers = {
                 **water_forecast_auth_service.get_auth_headers(),
                 "Content-Type": "application/json"
             }
             
             params = {
-                "stationCode": station_code,
-                "startTime": start_time,
-                "endTime": end_time
+                "schId": sch_id,
+                "stationName": station_name
             }
             
-            logger.info(f"正在调用水文站预报接口: {url}, 参数: {params}")
+            logger.info(f"正在获取站点预报数据: {url}, 参数: {params}")
             response = self._session.get(url, params=params, headers=headers, timeout=30)
             
-            logger.info(f"水文站预报响应状态码: {response.status_code}")
-            logger.info(f"水文站预报响应内容: {response.text}")
+            logger.info(f"站点预报数据响应状态码: {response.status_code}")
+            logger.info(f"站点预报数据响应内容: {response.text}")
             
             response.raise_for_status()
             
             result = response.json()
-            logger.info(f"水文站预报接口返回成功")
+            logger.info(f"站点预报数据获取成功")
             return result
                 
         except requests.exceptions.RequestException as e:
-            logger.error(f"水文站预报请求异常: {e}")
+            logger.error(f"获取站点预报数据请求异常: {e}")
             return {"success": False, "error": str(e)}
 
 

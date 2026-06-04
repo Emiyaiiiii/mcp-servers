@@ -136,7 +136,7 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
     
     Returns:
         (description, warning_level): 水位描述和告警级别
-            warning_level: "red", "orange", "yellow", ""(正常)
+            warning_level: ""(无颜色信息)
     """
     thresholds = _get_reservoir_thresholds(reservoir_name)
     if not thresholds or all(v == 0.0 for v in thresholds.values()):
@@ -148,11 +148,11 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
         XXS = thresholds["XXS_H"] if period == "后汛期" else thresholds["XXS_Q"]
 
         if water_level >= FHYY:
-            return (f"超防洪运用水位{round(water_level - FHYY, 2)}m", "yellow")
+            return (f"超防洪运用水位{round(water_level - FHYY, 2)}m", "")
         elif water_level >= FHYY - 0.5:
             return (f"低于防洪运用水位{round(FHYY - water_level, 2)}m", "")
         elif water_level >= XXS:
-            return (f"超汛限水位{round(water_level - XXS, 2)}m", "yellow")
+            return (f"超汛限水位{round(water_level - XXS, 2)}m", "")
         elif water_level >= XXS - 0.5:
             return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
         else:
@@ -174,18 +174,18 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
 
     # --- 坝顶高程 ---
     if water_level >= DAMEL:
-        return (f"超坝顶高程{round(water_level - DAMEL, 2)}m", "red")
+        return (f"超坝顶高程{round(water_level - DAMEL, 2)}m", "")
     elif water_level >= DAMEL - 0.5:
         return (f"低于坝顶高程{round(DAMEL - water_level, 2)}m", "")
 
     # --- 校核洪水位（需要考虑与DSFLZ/FHG重复） ---
     elif water_level >= CKFLZ:
         if CKFLZ == DSFLZ and DSFLZ > 0:
-            return (f"超校核洪水位（设计洪水位）{round(water_level - CKFLZ, 2)}m", "red")
+            return (f"超校核洪水位（设计洪水位）{round(water_level - CKFLZ, 2)}m", "")
         elif CKFLZ == FHG and FHG > 0:
-            return (f"超校核洪水位（防洪高水位）{round(water_level - CKFLZ, 2)}m", "red")
+            return (f"超校核洪水位（防洪高水位）{round(water_level - CKFLZ, 2)}m", "")
         else:
-            return (f"超校核洪水位{round(water_level - CKFLZ, 2)}m", "red")
+            return (f"超校核洪水位{round(water_level - CKFLZ, 2)}m", "")
     elif water_level >= CKFLZ - 0.5:
         if CKFLZ == DSFLZ and DSFLZ > 0:
             return (f"低于校核洪水位（设计洪水位）{round(CKFLZ - water_level, 2)}m", "")
@@ -197,7 +197,7 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
     # --- 设计洪水位（仅当DSFLZ>0且DSFLZ!=CKFLZ时） ---
     if DSFLZ > 0 and DSFLZ != CKFLZ:
         if water_level >= DSFLZ:
-            return (f"超设计洪水位{round(water_level - DSFLZ, 2)}m", "red")
+            return (f"超设计洪水位{round(water_level - DSFLZ, 2)}m", "")
         elif water_level >= DSFLZ - 0.5:
             if reservoir_name == "小浪底":
                 pass  # [273.5,274)让HHRZ显示"超历史最高水位"
@@ -207,13 +207,13 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
     # --- 防洪高水位（仅当FHG>0且FHG!=CKFLZ时） ---
     if FHG > 0 and FHG != CKFLZ:
         if water_level >= FHG:
-            return (f"超防洪高水位{round(water_level - FHG, 2)}m", "orange")
+            return (f"超防洪高水位{round(water_level - FHG, 2)}m", "")
         elif water_level >= FHG - 0.5:
             return (f"低于防洪高水位{round(FHG - water_level, 2)}m", "")
 
     # --- 历史最高水位 ---
     if water_level >= HHRZ:
-        return (f"超历史最高水位{round(water_level - HHRZ, 2)}m", "red")
+        return (f"超历史最高水位{round(water_level - HHRZ, 2)}m", "")
     elif water_level >= HHRZ - (1.0 if reservoir_name == "小浪底" else 0.5):
         # 小浪底：DSFLZ-0.5(273.5)==HHRZ，低于设计洪水位被跳过
         # 低于历史最高水位范围扩展为[HHRZ-1, HHRZ)=[272.5,273.5)
@@ -221,7 +221,7 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
 
     # --- 汛限水位 ---
     if water_level >= XXS:
-        return (f"超汛限水位{round(water_level - XXS, 2)}m", "yellow")
+        return (f"超汛限水位{round(water_level - XXS, 2)}m", "")
     elif water_level >= XXS - 0.5:
         return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
 

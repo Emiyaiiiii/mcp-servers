@@ -404,7 +404,7 @@ def register_ui_tools(mcp: FastMCP):
         """向前端发送预演指令，前端收到后执行具体的预演任务。
 
         Args:
-            scheme_id: 调度方案ID（如 DS-0001），不传则由前端选择当前方案或使用默认方案
+            scheme_id: 调度方案ID（如 DS-0001）
 
         Returns:
             发送预演指令的确认信息
@@ -575,7 +575,6 @@ def register_ui_tools(mcp: FastMCP):
         )
         logger.debug(f"send_plan_document_url 返回结果: {return_value}")
         return return_value
-
 
     @mcp.tool()
     async def show_evacuation_routes(

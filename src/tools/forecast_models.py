@@ -84,34 +84,81 @@ def register_forecast_models(mcp: FastMCP):
             end_time = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
         
         try:
-            if station_type.lower() == "reservoir":
-                # 解析水库名称到编码
-                station_code = get_reservoir_code(station_name)
-                if not station_code:
-                    return_value = {"success": False, "error": f"未找到水库: {station_name}"}
-                    logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
-                    return return_value
-                # 调用水库预报接口
-                result = water_forecast_service.get_reservoir_forecast(station_code, start_time, end_time)
-            elif station_type.lower() == "hydrology":
-                # 解析水文站名称到编码
-                station_code = get_hydrology_code(station_name)
-                if not station_code:
-                    return_value = {"success": False, "error": f"未找到水文站: {station_name}"}
-                    logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
-                    return return_value
-                # 调用水文站预报接口
-                result = water_forecast_service.get_hydrology_forecast(station_code, start_time, end_time)
-            else:
+            if station_type.lower() not in ["reservoir", "hydrology"]:
                 return_value = {"success": False, "error": f"不支持的站点类型: {station_type}，请使用 reservoir 或 hydrology"}
                 logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
                 return return_value
             
-            if result.get("success") is False or result.get("code") not in [200, "200", None]:
-                error_msg = result.get("message", result.get("error", "调用预报接口失败"))
+            scheme_list_result = water_forecast_service.get_scheme_list(start_time, end_time)
+            
+            if scheme_list_result.get("success") is False or scheme_list_result.get("code") not in [200, "200", None]:
+                error_msg = scheme_list_result.get("message", scheme_list_result.get("error", "获取预报方案清单失败"))
                 return_value = {"success": False, "error": error_msg}
                 logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
                 return return_value
+            
+            data_field = scheme_list_result.get("data")
+            
+            if isinstance(data_field, dict):
+                scheme_list = data_field.get("schList", [])
+                if not scheme_list:
+                    scheme_list = data_field.get("recommended", [])
+            elif isinstance(data_field, list):
+                scheme_list = data_field
+            elif isinstance(scheme_list_result, list):
+                scheme_list = scheme_list_result
+            else:
+                scheme_list = []
+            
+            if len(scheme_list) == 0:
+                return_value = {"success": False, "error": "预报方案清单为空，请检查时间范围或联系管理员"}
+                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                return return_value
+            
+            def parse_datetime(dt_str):
+                for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"]:
+                    try:
+                        return datetime.strptime(dt_str, fmt)
+                    except ValueError:
+                        continue
+                return None
+            
+            target_start = parse_datetime(start_time)
+            target_end = parse_datetime(end_time)
+            
+            matched_scheme = None
+            for scheme in scheme_list:
+                scheme_time = parse_datetime(scheme.get("schTime", ""))
+                
+                if scheme_time and target_start and target_end:
+                    if target_start <= scheme_time <= target_end:
+                        matched_scheme = scheme
+                        break
+            
+            if not matched_scheme:
+                return_value = {"success": False, "error": f"未找到与时间范围 {start_time} - {end_time} 匹配的预报方案"}
+                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                return return_value
+            
+            sch_id = matched_scheme.get("schId") or matched_scheme.get("id")
+            if not sch_id:
+                return_value = {"success": False, "error": "预报方案中未找到 schId"}
+                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                return return_value
+            
+            result = water_forecast_service.get_scheme_data_by_station_name(sch_id, station_name)
+            
+            if result.get("success") is False or result.get("code") not in [200, "200", None]:
+                error_msg = result.get("message", result.get("error", "获取预报数据失败"))
+                return_value = {"success": False, "error": error_msg}
+                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+                return return_value
+            
+            station_code = ""
+            if station_type.lower() == "reservoir":
+                station_code = get_reservoir_code(station_name) or ""
+            elif station_type.lower() == "hydrology":
+                station_code = get_hydrology_code(station_name) or ""
             
             return_value = {
                 "success": True,
@@ -121,8 +168,9 @@ def register_forecast_models(mcp: FastMCP):
                 "start_time": start_time,
                 "end_time": end_time,
                 "command": "FUNC_RUN_WATER_FORECAST_MODEL",
+                "sch_id": sch_id,
                 "forecast_data": result.get("data", result),
-                "message": f"来水预报模型执行成功，已获取{station_type} {station_name}({station_code})的预报数据"
+                "message": f"来水预报模型执行成功，已获取{station_type} {station_name}的预报数据"
             }
             logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
             return return_value
