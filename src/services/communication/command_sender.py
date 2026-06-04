@@ -37,7 +37,7 @@ class CommandSender:
         data: Dict[str, Any],
         target: str = "scene",
         session_id: Optional[str] = None,
-        wait_response: bool = True
+        wait_response: bool = False
     ) -> Dict[str, Any]:
         """发送指令
 
@@ -70,8 +70,8 @@ class CommandSender:
         if wait_response:
             response = await message_queue.send_command(command, self.timeout, session_id)
         else:
-            # 不需要等待响应的情况
-            await message_queue.send_command(command, timeout=1, target_session=session_id)
+            # 不需要等待响应的情况：直接通知回调，不进入 Future 等待
+            await message_queue.notify_only(command, target_session=session_id)
             response = {"success": True, "message": "指令已发送"}
 
         return response

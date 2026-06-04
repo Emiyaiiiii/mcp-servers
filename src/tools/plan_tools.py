@@ -70,7 +70,7 @@ def register_plan_tools(mcp: FastMCP):
             return return_value
 
     @mcp.tool()
-    async def load_plan_template(generation_time: str = None, scheme_id: str = None) -> str:
+    async def load_plan_template(generation_time: str, scheme_id: str = None) -> str:
         """
         自动查询数据并生成完整的洪水调度预案。
 
@@ -84,7 +84,7 @@ def register_plan_tools(mcp: FastMCP):
         7. 渲染预案模板
 
         Args:
-            generation_time: 预案生成时间，不指定则使用当前时间。支持历史时间查询，如"2021-10-01"
+            generation_time: 调度方案的**开始时间**（必传），即预案对应调度时段的起始时刻。支持历史时间查询。格式: "yyyy-MM-dd HH:mm:ss" 或 "yyyy-MM-dd"，例如 "2021-10-02" 对应2021年秋汛调度方案的开始时间
             scheme_id: 调度方案ID，如果提供，则从调度方案中获取各水库数据（取最大值）
 
         Returns:
@@ -97,18 +97,16 @@ def register_plan_tools(mcp: FastMCP):
 
             current_time = datetime.now()
             specified_time = None
-            
-            if generation_time:
+
+            try:
+                specified_time = datetime.strptime(generation_time, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
                 try:
-                    specified_time = datetime.strptime(generation_time, "%Y-%m-%d %H:%M:%S")
+                    specified_time = datetime.strptime(generation_time, "%Y-%m-%d")
                 except ValueError:
-                    try:
-                        specified_time = datetime.strptime(generation_time, "%Y-%m-%d")
-                    except ValueError:
-                        specified_time = current_time
-            else:
-                generation_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
-                specified_time = current_time
+                    return_value = f"生成预案时出错: 时间格式无效，请使用 'yyyy-MM-dd HH:mm:ss' 或 'yyyy-MM-dd' 格式，例如 '2026-04-15 00:00:00' 或 '2026-04-15'"
+                    logger.error(f"load_plan_template 错误: {return_value}")
+                    return return_value
 
             is_historical = specified_time < current_time - timedelta(hours=1)
             logger.info(f"历史场景判断: {is_historical}, 指定时间: {specified_time}, 当前时间: {current_time}")

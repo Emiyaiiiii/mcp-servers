@@ -9,7 +9,7 @@
 DELETE FROM reservoirs;
 
 INSERT INTO reservoirs (code, station_code, name, name_alias, river, location, capacity_total, capacity_flood, level_normal, level_flood_limit, level_flood_design, level_flood_check, level_flood_max, level_warning, level_dam_top, level_flood_high, level_dead, level_flood_limit_back, level_flood_operation, level_land_acquisition, level_resettlement, level_flood_storage_limit, functions, control_area, upstream_station, downstream_station, description) VALUES
-('BDA00000111', '40104430', '三门峡水库', '["三门峡", "SMX"]', '黄河', '河南省陕县和山西省平陆县交界处', 58.1, 58.0, NULL, 305.0, NULL, NULL, 331.23, 318.0, 351.65, 333.65, NULL, NULL, 333.65, NULL, NULL, NULL, '["防洪", "防凌", "灌溉", "发电", "供水"]', 688400.0, '潼关', '花园口', '三门峡水库的任务是防洪、防凌、灌溉、供水和发电'),
+('BDA00000111', '40104430', '三门峡水库', '["三门峡", "SMX"]', '黄河', '河南省陕县和山西省平陆县交界处', 58.1, 58.0, NULL, 305.0, NULL, 335.00, 332.58, 318.0, 351.65, 333.65, NULL, 305.00, 333.65, NULL, NULL, NULL, '["防洪", "防凌", "灌溉", "发电", "供水"]', 688400.0, '潼关', '花园口', '三门峡水库的任务是防洪、防凌、灌溉、供水和发电'),
 ('BDA00000121', '40104690', '小浪底水库', '["小浪底", "XLD"]', '黄河', '河南省洛阳市吉利区', 126.5, 40.5, NULL, 235.0, 274.0, 275.0, 273.5, NULL, 281.0, 275.0, 230.0, 248.0, NULL, NULL, NULL, NULL, '["防洪", "防凌", "减淤", "发电", "供水"]', 694155.0, '三门峡', '花园口', '小浪底水库是黄河干流控制性工程'),
 ('BDA80200721', '41602500', '陆浑水库', '["陆浑", "LH"]', '伊河', '河南省嵩县', 13.9, 7.1, NULL, 317, 327.5, 331.8, 320.91, 319.5, 333, 323, 298, 317.5, NULL, 319.5, 325, 323, '["防洪", "灌溉", "发电"]', 3492.0, NULL, '白马寺', '陆浑水库是伊河上的控制性工程'),
 ('BDA80000661', '41605400', '故县水库', '["故县", "GX"]', '洛河', '河南省洛宁县', 11.8, 6.8, NULL, 527.3, 547.39, 549.86, 537.75, 535.84, 551.84, 546.84, 498.84, 534.3, NULL, 533.64, 543.04, 546.84, '["防洪", "灌溉", "发电"]', 5370.0, NULL, '白马寺', '故县水库是洛河上的控制性工程'),

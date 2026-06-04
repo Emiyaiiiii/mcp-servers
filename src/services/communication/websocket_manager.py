@@ -9,17 +9,17 @@ logger = get_logger(__name__)
 
 class WebSocketConnectionManager:
     """WebSocket 连接管理器"""
-    
+
     def __init__(self):
         # 存储所有活跃的连接
         self.active_connections: Dict[str, WebSocket] = {}
         # 连接计数器
         self._connection_counter = 0
-        
+
         # 新增：session 映射
         self.session_to_connection: Dict[str, str] = {}  # session_id → connection_id
         self.connection_to_session: Dict[str, str] = {}  # connection_id → session_id
-    
+
     async def connect(self, websocket: WebSocket, client_type: str = "browser", session_id: Optional[str] = None) -> str:
         """
         接受并建立 WebSocket 连接
@@ -40,33 +40,58 @@ class WebSocketConnectionManager:
         
         # 存储连接
         self.active_connections[connection_id] = websocket
-        
+
         # 新增：建立 session 映射
         if session_id:
             self.session_to_connection[session_id] = connection_id
             self.connection_to_session[connection_id] = session_id
-        
+
         logger.info(f"✅ 连接已建立: {connection_id} (session: {session_id or 'broadcast'}), 当前连接数: {len(self.active_connections)}")
-        
+
         return connection_id
-    
+
+    async def force_disconnect(self, connection_id: str, reason: str = "未知原因") -> None:
+        """
+        强制断开连接（内部使用，发送失败时调用）
+
+        Args:
+            connection_id: 连接 ID
+            reason: 断开原因
+        """
+        if connection_id in self.active_connections:
+            del self.active_connections[connection_id]
+
+            # 清理 session 映射
+            session_id = self.connection_to_session.get(connection_id)
+            if session_id:
+                if connection_id in self.connection_to_session:
+                    del self.connection_to_session[connection_id]
+                if session_id in self.session_to_connection:
+                    del self.session_to_connection[session_id]
+
+            # 注销消息回调
+            message_queue.unregister_ws_callback(connection_id)
+
+            logger.warning(f"⚡ 强制断开连接: {connection_id} (reason: {reason}), 当前连接数: {len(self.active_connections)}")
+
     def disconnect(self, connection_id: str) -> None:
         """
         断开 WebSocket 连接
-        
+
         Args:
             connection_id: 连接 ID
         """
         if connection_id in self.active_connections:
             del self.active_connections[connection_id]
-            
-            # 新增：清理 session 映射
+
+            # 清理 session 映射
             session_id = self.connection_to_session.get(connection_id)
             if session_id:
-                del self.connection_to_session[connection_id]
+                if connection_id in self.connection_to_session:
+                    del self.connection_to_session[connection_id]
                 if session_id in self.session_to_connection:
                     del self.session_to_connection[session_id]
-            
+
             logger.info(f"❌ 连接已断开: {connection_id} (session: {session_id or 'unknown'}), 当前连接数: {len(self.active_connections)}")
     
     def get_connection_by_session(self, session_id: str) -> Optional[str]:
@@ -93,15 +118,23 @@ class WebSocketConnectionManager:
                     await websocket.send_text(message_str)
                 except Exception as e:
                     logger.error(f"❌ 向 connection_id: {connection_id} 发送消息失败: {e}", exc_info=True)
+                    # 发送失败，强制断开连接
+                    await self.force_disconnect(connection_id, reason=f"发送失败: {e}")
             else:
                 logger.warning(f"⚠️ 找不到连接，connection_id: {connection_id}")
         else:
             # 发送到所有连接
+            failed_connections = []
             for conn_id, websocket in list(self.active_connections.items()):
                 try:
                     await websocket.send_text(message_str)
                 except Exception as e:
                     logger.error(f"❌ 向 connection_id: {conn_id} 发送消息失败: {e}", exc_info=True)
+                    failed_connections.append(conn_id)
+            
+            # 批量清理发送失败的连接
+            for conn_id in failed_connections:
+                await self.force_disconnect(conn_id, reason="发送失败")
     
     def get_connection_count(self) -> int:
         """
@@ -174,10 +207,10 @@ async def websocket_handler(websocket: WebSocket):
                 # 尝试从响应中提取有用的信息
                 func_name = message.get('function') or message.get('command') or message.get('message', 'unknown')
                 logger.info(f"📥 收到响应: {func_name}")
-                
+
                 # 将消息传递给消息队列处理（通常是响应）
                 await message_queue.receive_response(message)
-                
+
             except json.JSONDecodeError as e:
                 logger.error(f"❌ 消息格式错误: {e}")
                 # 发送错误响应到客户端
@@ -196,7 +229,7 @@ async def websocket_handler(websocket: WebSocket):
     finally:
         # 清理资源
         if connection_id:
-            # 断开连接
+            # 断开连接（使用同步方法清理）
             websocket_manager.disconnect(connection_id)
             # 注销回调（按 connection_id）
             message_queue.unregister_ws_callback(connection_id)

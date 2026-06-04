@@ -1,11 +1,14 @@
+import asyncio
 from logging import info
 import requests
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from mcp.server.fastmcp import FastMCP
 from src.config.settings import settings
 from src.utils.station_codes import get_reservoir_code, get_station_code, get_reservoir_station_code
 from src.services.external_api.auth_service import auth_service
+from src.services.communication.command_sender import command_sender
+from src.utils.response_helper import success_response
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -99,6 +102,219 @@ def _resolve_reservoir_for_api(name_or_code: str) -> str | None:
         return name_or_code
     
     return station_code
+
+def _get_reservoir_thresholds(reservoir_name: str) -> dict:
+    """从数据库获取水库特征水位阈值"""
+    from src.services.storage.database.data_access import ReservoirAccess
+    
+    reservoir = ReservoirAccess.get_by_name(reservoir_name + "水库")
+    if not reservoir:
+        reservoir = ReservoirAccess.get_by_name(reservoir_name)
+    
+    if not reservoir:
+        return {}
+    
+    return {
+        "DAMEL": reservoir.get("level_dam_top") or 0.0,
+        "CKFLZ": reservoir.get("level_flood_check") or 0.0,
+        "DSFLZ": reservoir.get("level_flood_design") or 0.0,
+        "FHG": reservoir.get("level_flood_high") or 0.0,
+        "HHRZ": reservoir.get("level_flood_max") or 0.0,
+        "XXS_Q": reservoir.get("level_flood_limit") or 0.0,
+        "XXS_H": reservoir.get("level_flood_limit_back") or 0.0,
+        "DDZ": reservoir.get("level_dead") or 0.0,
+        "FHYY": reservoir.get("level_flood_operation") or 0.0
+    }
+
+def _judge_water_level_warning(reservoir_name: str, water_level: float, period: str = "后汛期") -> Tuple[str, str]:
+    """根据水位判断水位描述和告警级别
+    
+    遵循Excel逻辑：从上到下按水位阈值降序判断，每个阈值T划分三个区间：
+    - [T, +∞) → "超XX水位"
+    - [T-0.5, T) → "低于XX水位"
+    - (-∞, T-0.5) → 继续往下判断
+    
+    Returns:
+        (description, warning_level): 水位描述和告警级别
+            warning_level: "red", "orange", "yellow", ""(正常)
+    """
+    thresholds = _get_reservoir_thresholds(reservoir_name)
+    if not thresholds or all(v == 0.0 for v in thresholds.values()):
+        return ("", "")
+
+    # ---- 东平湖（只判断防洪运用水位和汛限水位） ----
+    if reservoir_name == "东平湖":
+        FHYY = thresholds["FHYY"]
+        XXS = thresholds["XXS_H"] if period == "后汛期" else thresholds["XXS_Q"]
+
+        if water_level >= FHYY:
+            return (f"超防洪运用水位{round(water_level - FHYY, 2)}m", "yellow")
+        elif water_level >= FHYY - 0.5:
+            return (f"低于防洪运用水位{round(FHYY - water_level, 2)}m", "")
+        elif water_level >= XXS:
+            return (f"超汛限水位{round(water_level - XXS, 2)}m", "yellow")
+        elif water_level >= XXS - 0.5:
+            return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
+        else:
+            return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
+
+    DAMEL = thresholds["DAMEL"]
+    CKFLZ = thresholds["CKFLZ"]
+    DSFLZ = thresholds["DSFLZ"]
+    FHG = thresholds["FHG"]
+    HHRZ = thresholds["HHRZ"]
+    # 汛限水位：优先选对应汛期的，若为0（未设置）则回退到另一个汛期
+    if period == "后汛期":
+        XXS = thresholds["XXS_H"] if thresholds["XXS_H"] > 0 else thresholds["XXS_Q"]
+    else:
+        XXS = thresholds["XXS_Q"] if thresholds["XXS_Q"] > 0 else thresholds["XXS_H"]
+    DDZ = thresholds["DDZ"]
+
+    # ========== 按Excel从上到下顺序判断 ==========
+
+    # --- 坝顶高程 ---
+    if water_level >= DAMEL:
+        return (f"超坝顶高程{round(water_level - DAMEL, 2)}m", "red")
+    elif water_level >= DAMEL - 0.5:
+        return (f"低于坝顶高程{round(DAMEL - water_level, 2)}m", "")
+
+    # --- 校核洪水位（需要考虑与DSFLZ/FHG重复） ---
+    elif water_level >= CKFLZ:
+        if CKFLZ == DSFLZ and DSFLZ > 0:
+            return (f"超校核洪水位（设计洪水位）{round(water_level - CKFLZ, 2)}m", "red")
+        elif CKFLZ == FHG and FHG > 0:
+            return (f"超校核洪水位（防洪高水位）{round(water_level - CKFLZ, 2)}m", "red")
+        else:
+            return (f"超校核洪水位{round(water_level - CKFLZ, 2)}m", "red")
+    elif water_level >= CKFLZ - 0.5:
+        if CKFLZ == DSFLZ and DSFLZ > 0:
+            return (f"低于校核洪水位（设计洪水位）{round(CKFLZ - water_level, 2)}m", "")
+        elif CKFLZ == FHG and FHG > 0:
+            return (f"低于校核洪水位（防洪高水位）{round(CKFLZ - water_level, 2)}m", "")
+        else:
+            return (f"低于校核洪水位{round(CKFLZ - water_level, 2)}m", "")
+
+    # --- 设计洪水位（仅当DSFLZ>0且DSFLZ!=CKFLZ时） ---
+    if DSFLZ > 0 and DSFLZ != CKFLZ:
+        if water_level >= DSFLZ:
+            return (f"超设计洪水位{round(water_level - DSFLZ, 2)}m", "red")
+        elif water_level >= DSFLZ - 0.5:
+            if reservoir_name == "小浪底":
+                pass  # [273.5,274)让HHRZ显示"超历史最高水位"
+            else:
+                return (f"低于设计洪水位{round(DSFLZ - water_level, 2)}m", "")
+
+    # --- 防洪高水位（仅当FHG>0且FHG!=CKFLZ时） ---
+    if FHG > 0 and FHG != CKFLZ:
+        if water_level >= FHG:
+            return (f"超防洪高水位{round(water_level - FHG, 2)}m", "orange")
+        elif water_level >= FHG - 0.5:
+            return (f"低于防洪高水位{round(FHG - water_level, 2)}m", "")
+
+    # --- 历史最高水位 ---
+    if water_level >= HHRZ:
+        return (f"超历史最高水位{round(water_level - HHRZ, 2)}m", "red")
+    elif water_level >= HHRZ - (1.0 if reservoir_name == "小浪底" else 0.5):
+        # 小浪底：DSFLZ-0.5(273.5)==HHRZ，低于设计洪水位被跳过
+        # 低于历史最高水位范围扩展为[HHRZ-1, HHRZ)=[272.5,273.5)
+        return (f"低于历史最高水位{round(HHRZ - water_level, 2)}m", "")
+
+    # --- 汛限水位 ---
+    if water_level >= XXS:
+        return (f"超汛限水位{round(water_level - XXS, 2)}m", "yellow")
+    elif water_level >= XXS - 0.5:
+        return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
+
+    # --- 死水位 ---
+    if DDZ > 0:
+        if water_level >= DDZ:
+            return (f"超死水位{round(water_level - DDZ, 2)}m", "")
+        else:
+            return (f"低于死水位{round(DDZ - water_level, 2)}m", "")
+
+    # 无死水位（DDZ=0）时，低于汛限水位即返回
+    if water_level < XXS:
+        return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
+
+    return (f"水位正常{round(water_level, 2)}m", "")
+
+def _add_water_level_description(data: Dict[str, Any], use_max_level: bool = False) -> Dict[str, Any]:
+    """为水库水情数据添加水位描述和告警级别
+    
+    Args:
+        data: 原始数据
+        use_max_level: 是否使用时间段内的最大水位判断（用于时间段查询）
+    """
+    if data.get("code") != 200:
+        return data
+    
+    if "data" in data and isinstance(data["data"], list):
+        if use_max_level and len(data["data"]) > 1:
+            reservoir_max_levels = {}
+            for item in data["data"]:
+                reservoir_name = item.get("ennm")
+                water_level = item.get("level")
+                if reservoir_name and water_level is not None:
+                    if reservoir_name not in reservoir_max_levels or water_level > reservoir_max_levels[reservoir_name]:
+                        reservoir_max_levels[reservoir_name] = water_level
+            
+            for item in data["data"]:
+                reservoir_name = item.get("ennm")
+                max_level = reservoir_max_levels.get(reservoir_name)
+                if reservoir_name and max_level is not None:
+                    description, warning_level = _judge_water_level_warning(reservoir_name, max_level)
+                    if description:
+                        item["level_desc"] = description
+                    if warning_level:
+                        item["warning_level"] = warning_level
+        else:
+            for item in data["data"]:
+                reservoir_name = item.get("ennm")
+                water_level = item.get("level")
+                if reservoir_name and water_level is not None:
+                    description, warning_level = _judge_water_level_warning(reservoir_name, water_level)
+                    if description:
+                        item["level_desc"] = description
+                    if warning_level:
+                        item["warning_level"] = warning_level
+    
+    return data
+
+def _trigger_warning_alert(data: Dict[str, Any]) -> None:
+    """异步发送水库告警指令到前端，控制GIS站点颜色（不等待结果）"""
+    if data.get("code") != 200:
+        return
+    
+    markers = []
+    if "data" in data and isinstance(data["data"], list):
+        for item in data["data"]:
+            warning_level = item.get("warning_level")
+            if warning_level:
+                marker = {
+                    "id": item.get("ennmcd"),
+                    "name": item.get("ennm"),
+                    "type": "reservoir",
+                    "warning_type": "water_level",
+                    "current_value": item.get("level"),
+                    "description": item.get("level_desc"),
+                    "level": warning_level
+                }
+                markers.append(marker)
+    
+    if markers:
+        async def _send():
+            try:
+                result = await command_sender.send_ui_command("FUNC_WARNING_HIGHLIGHT", {
+                    "markers": markers, "action": "show"
+                })
+                if not result.get("success"):
+                    logger.warning(f"告警指令发送失败: {result.get('error', '未知错误')}")
+                else:
+                    logger.info(f"已发送告警指令: {len(markers)} 个站点")
+            except Exception as e:
+                logger.error(f"发送告警指令异常: {e}", exc_info=True)
+
+        asyncio.create_task(_send())
 
 def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool = True) -> Dict[str, Any]:
     """发送GET请求，支持token认证和自动刷新"""
@@ -782,7 +998,9 @@ def register_data_api_tools(mcp: FastMCP):
                         "inflow": 854.0000,       // 入库流量
                         "level": 247.2300,        // 水位
                         "outflow": 888.0000,      // 出库流量
-                        "wq": 32.5100             // 蓄量
+                        "wq": 32.5100,            // 蓄量
+                        "level_desc": "超汛限水位247.23m",  // 水位描述
+                        "warning_level": "yellow"  // 告警级别: red/yellow/orange/空
                     }
                 ]
             }
@@ -795,6 +1013,8 @@ def register_data_api_tools(mcp: FastMCP):
             url = f"{BASE_URL}/hydrometric/rhourrt/list"
             params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
             result = _get(url, params)
+            result = _add_water_level_description(result, use_max_level=True)
+            _trigger_warning_alert(result)
         logger.debug(f"get_reservoir_realtime 返回结果: {result}")
         return result
 
@@ -970,7 +1190,9 @@ def register_data_api_tools(mcp: FastMCP):
                         "inflow": 854.0000,       // 入库流量
                         "level": 247.2300,        // 水位
                         "outflow": 888.0000,      // 出库流量
-                        "wq": 32.5100             // 蓄量
+                        "wq": 32.5100,            // 蓄量
+                        "level_desc": "超汛限水位247.23m",  // 水位描述
+                        "warning_level": "yellow"  // 告警级别: red/yellow/orange/空
                     }
                 ]
             }
@@ -978,6 +1200,8 @@ def register_data_api_tools(mcp: FastMCP):
         logger.info(f"调用 get_reservoir_latest_realtime，收到参数: (无)")
         url = f"{BASE_URL}/hydrometric/rhourrt/listLatest"
         result = _get(url)
+        result = _add_water_level_description(result)
+        _trigger_warning_alert(result)
         logger.debug(f"get_reservoir_latest_realtime 返回结果: {result}")
         return result
 

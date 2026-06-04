@@ -1,5 +1,4 @@
 import asyncio
-import json
 import uuid
 from typing import Optional, Dict, Any
 from src.utils.logger import get_logger
@@ -19,7 +18,7 @@ class MessageQueue:
         # 用于线程安全的锁
         self._lock = asyncio.Lock()
     
-    async def send_command(self, command: Dict[str, Any], timeout: int = 60, target_session: Optional[str] = None) -> Dict[str, Any]:
+    async def send_command(self, command: Dict[str, Any], timeout: int = 10, target_session: Optional[str] = None) -> Dict[str, Any]:
         """
         发送命令到 WebSocket 客户端并等待响应
         
@@ -77,6 +76,18 @@ class MessageQueue:
                 "command_id": command_id
             }
     
+    async def notify_only(self, command: Dict[str, Any], target_session: Optional[str] = None) -> None:
+        """
+        仅通知回调（不创建 Future、不等待响应）
+
+        用于 fire-and-forget 场景，避免无谓的 1 秒等待
+
+        Args:
+            command: 要发送的命令
+            target_session: 目标 session_id，如果为 None 则广播到所有连接
+        """
+        await self._notify_callbacks(command, target_session)
+
     async def receive_response(self, response: Dict[str, Any]) -> None:
         """
         接收来自 WebSocket 客户端的响应
