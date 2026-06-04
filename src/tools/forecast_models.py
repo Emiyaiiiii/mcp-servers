@@ -196,6 +196,7 @@ def register_forecast_models(mcp: FastMCP):
         logger.info(f"调用 generate_dispatch_scheme，收到参数: start_time={repr(start_time)}")
         
         from src.services.storage.database.data_access import DispatchTimeseriesAccess
+        from src.tools.data_api_tools import _judge_water_level_warning
         
         try:
             schemes = DispatchTimeseriesAccess.get_all_schemes()
@@ -272,6 +273,7 @@ def register_forecast_models(mcp: FastMCP):
                     records = group.get(station_name, [])
                     res_data = {"time": formatted_ts}
                     has_value = False
+                    water_level = None
                     
                     for record in records:
                         metric = metric_type_map.get(record['metric_type'])
@@ -279,10 +281,18 @@ def register_forecast_models(mcp: FastMCP):
                             raw_value = record['metric_value']
                             if raw_value is not None:
                                 has_value = True
-                                if metric in ('water_level', 'storage'):
+                                if metric == 'water_level':
+                                    water_level = round(raw_value, 2)
+                                    res_data[metric] = water_level
+                                elif metric == 'storage':
                                     res_data[metric] = round(raw_value, 2)
                                 else:
                                     res_data[metric] = round(raw_value)
+                    
+                    if water_level is not None:
+                        description, warning_level = _judge_water_level_warning(station_name, water_level)
+                        if description:
+                            res_data["level_desc"] = description
                     
                     if has_value:
                         reservoirs[res_name]["timeseries"].append(res_data)

@@ -130,6 +130,10 @@ CREATE TABLE IF NOT EXISTS rainfall_stations (
     longitude DECIMAL(10,6),
     authority VARCHAR(100),
     established_year VARCHAR(10),
+    basin_name VARCHAR(100),
+    weight_area DECIMAL(15,4),
+    weight_factor DECIMAL(10,6),
+    data_year VARCHAR(10),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
