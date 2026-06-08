@@ -136,7 +136,7 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
     
     Returns:
         (description, warning_level): 水位描述和告警级别
-            warning_level: ""(无颜色信息)
+            warning_level: "alert"(超过任一警戒水位), ""(安全)
     """
     thresholds = _get_reservoir_thresholds(reservoir_name)
     if not thresholds or all(v == 0.0 for v in thresholds.values()):
@@ -148,11 +148,11 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
         XXS = thresholds["XXS_H"] if period == "后汛期" else thresholds["XXS_Q"]
 
         if water_level >= FHYY:
-            return (f"超防洪运用水位{round(water_level - FHYY, 2)}m", "")
+            return (f"超防洪运用水位{round(water_level - FHYY, 2)}m", "alert")
         elif water_level >= FHYY - 0.5:
             return (f"低于防洪运用水位{round(FHYY - water_level, 2)}m", "")
         elif water_level >= XXS:
-            return (f"超汛限水位{round(water_level - XXS, 2)}m", "")
+            return (f"超汛限水位{round(water_level - XXS, 2)}m", "alert")
         elif water_level >= XXS - 0.5:
             return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
         else:
@@ -163,7 +163,6 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
     DSFLZ = thresholds["DSFLZ"]
     FHG = thresholds["FHG"]
     HHRZ = thresholds["HHRZ"]
-    # 汛限水位：优先选对应汛期的，若为0（未设置）则回退到另一个汛期
     if period == "后汛期":
         XXS = thresholds["XXS_H"] if thresholds["XXS_H"] > 0 else thresholds["XXS_Q"]
     else:
@@ -174,54 +173,49 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
 
     # --- 坝顶高程 ---
     if water_level >= DAMEL:
-        return (f"超坝顶高程{round(water_level - DAMEL, 2)}m", "")
+        return (f"超坝顶高程{round(water_level - DAMEL, 2)}m", "alert")
     elif water_level >= DAMEL - 0.5:
-        return (f"低于坝顶高程{round(DAMEL - water_level, 2)}m", "")
+        return (f"低于坝顶高程{round(DAMEL - water_level, 2)}m", "alert")
 
-    # --- 校核洪水位（需要考虑与DSFLZ/FHG重复） ---
+    # --- 校核洪水位 ---
     elif water_level >= CKFLZ:
         if CKFLZ == DSFLZ and DSFLZ > 0:
-            return (f"超校核洪水位（设计洪水位）{round(water_level - CKFLZ, 2)}m", "")
+            return (f"超校核洪水位（设计洪水位）{round(water_level - CKFLZ, 2)}m", "alert")
         elif CKFLZ == FHG and FHG > 0:
-            return (f"超校核洪水位（防洪高水位）{round(water_level - CKFLZ, 2)}m", "")
+            return (f"超校核洪水位（防洪高水位）{round(water_level - CKFLZ, 2)}m", "alert")
         else:
-            return (f"超校核洪水位{round(water_level - CKFLZ, 2)}m", "")
+            return (f"超校核洪水位{round(water_level - CKFLZ, 2)}m", "alert")
     elif water_level >= CKFLZ - 0.5:
         if CKFLZ == DSFLZ and DSFLZ > 0:
-            return (f"低于校核洪水位（设计洪水位）{round(CKFLZ - water_level, 2)}m", "")
+            return (f"低于校核洪水位（设计洪水位）{round(CKFLZ - water_level, 2)}m", "alert")
         elif CKFLZ == FHG and FHG > 0:
-            return (f"低于校核洪水位（防洪高水位）{round(CKFLZ - water_level, 2)}m", "")
+            return (f"低于校核洪水位（防洪高水位）{round(CKFLZ - water_level, 2)}m", "alert")
         else:
-            return (f"低于校核洪水位{round(CKFLZ - water_level, 2)}m", "")
+            return (f"低于校核洪水位{round(CKFLZ - water_level, 2)}m", "alert")
 
-    # --- 设计洪水位（仅当DSFLZ>0且DSFLZ!=CKFLZ时） ---
+    # --- 设计洪水位 ---
     if DSFLZ > 0 and DSFLZ != CKFLZ:
         if water_level >= DSFLZ:
-            return (f"超设计洪水位{round(water_level - DSFLZ, 2)}m", "")
+            return (f"超设计洪水位{round(water_level - DSFLZ, 2)}m", "alert")
         elif water_level >= DSFLZ - 0.5:
-            if reservoir_name == "小浪底":
-                pass  # [273.5,274)让HHRZ显示"超历史最高水位"
-            else:
-                return (f"低于设计洪水位{round(DSFLZ - water_level, 2)}m", "")
+            return (f"低于设计洪水位{round(DSFLZ - water_level, 2)}m", "alert")
 
-    # --- 防洪高水位（仅当FHG>0且FHG!=CKFLZ时） ---
+    # --- 防洪高水位 ---
     if FHG > 0 and FHG != CKFLZ:
         if water_level >= FHG:
-            return (f"超防洪高水位{round(water_level - FHG, 2)}m", "")
+            return (f"超防洪高水位{round(water_level - FHG, 2)}m", "alert")
         elif water_level >= FHG - 0.5:
-            return (f"低于防洪高水位{round(FHG - water_level, 2)}m", "")
+            return (f"低于防洪高水位{round(FHG - water_level, 2)}m", "alert")
 
     # --- 历史最高水位 ---
     if water_level >= HHRZ:
-        return (f"超历史最高水位{round(water_level - HHRZ, 2)}m", "")
+        return (f"超历史最高水位{round(water_level - HHRZ, 2)}m", "alert")
     elif water_level >= HHRZ - (1.0 if reservoir_name == "小浪底" else 0.5):
-        # 小浪底：DSFLZ-0.5(273.5)==HHRZ，低于设计洪水位被跳过
-        # 低于历史最高水位范围扩展为[HHRZ-1, HHRZ)=[272.5,273.5)
-        return (f"低于历史最高水位{round(HHRZ - water_level, 2)}m", "")
+        return (f"低于历史最高水位{round(HHRZ - water_level, 2)}m", "alert")
 
     # --- 汛限水位 ---
     if water_level >= XXS:
-        return (f"超汛限水位{round(water_level - XXS, 2)}m", "")
+        return (f"超汛限水位{round(water_level - XXS, 2)}m", "alert")
     elif water_level >= XXS - 0.5:
         return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
 
@@ -232,7 +226,6 @@ def _judge_water_level_warning(reservoir_name: str, water_level: float, period: 
         else:
             return (f"低于死水位{round(DDZ - water_level, 2)}m", "")
 
-    # 无死水位（DDZ=0）时，低于汛限水位即返回
     if water_level < XXS:
         return (f"低于汛限水位{round(XXS - water_level, 2)}m", "")
 
@@ -280,8 +273,8 @@ def _add_water_level_description(data: Dict[str, Any], use_max_level: bool = Fal
     
     return data
 
-def _trigger_warning_alert(data: Dict[str, Any]) -> None:
-    """异步发送水库告警指令到前端，控制GIS站点颜色（不等待结果）"""
+async def _trigger_warning_alert(data: Dict[str, Any]) -> None:
+    """异步发送水库告警指令到前端，控制GIS站点颜色"""
     if data.get("code") != 200:
         return
     
@@ -302,27 +295,31 @@ def _trigger_warning_alert(data: Dict[str, Any]) -> None:
                 markers.append(marker)
     
     if markers:
-        async def _send():
-            try:
-                result = await command_sender.send_ui_command("FUNC_WARNING_HIGHLIGHT", {
-                    "markers": markers, "action": "show"
-                })
-                if not result.get("success"):
-                    logger.warning(f"告警指令发送失败: {result.get('error', '未知错误')}")
-                else:
-                    logger.info(f"已发送告警指令: {len(markers)} 个站点")
-            except Exception as e:
-                logger.error(f"发送告警指令异常: {e}", exc_info=True)
-
-        asyncio.create_task(_send())
+        try:
+            result = await command_sender.send_ui_command("FUNC_WARNING_HIGHLIGHT", {
+                "markers": markers, "action": "show"
+            })
+            if not result.get("success"):
+                logger.warning(f"告警指令发送失败: {result.get('error', '未知错误')}")
+            else:
+                logger.info(f"已发送告警指令: {len(markers)} 个站点")
+        except Exception as e:
+            logger.error(f"发送告警指令异常: {e}", exc_info=True)
 
 def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool = True) -> Dict[str, Any]:
     """发送GET请求，支持token认证和自动刷新"""
     try:
         session = _get_session()
         headers = auth_service.get_auth_headers()
+        
+        # 诊断：记录是否有 Authorization 头及其前20位
+        auth_val = headers.get("Authorization", "")
+        logger.info(f"_get 请求 [url={url}, has_auth={bool(auth_val)}, auth_prefix={auth_val[:20] if auth_val else 'N/A'}]")
 
         response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
+
+        # 诊断：记录响应状态码和前200字符
+        logger.info(f"_get 响应 [status={response.status_code}, body_prefix={response.text[:200]}]")
 
         # 处理401未授权错误，尝试刷新token后重试
         if response.status_code == 401 and retry_with_auth:
@@ -330,7 +327,9 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
             auth_service.clear_token()
             headers = auth_service.get_auth_headers()
             if headers:
+                logger.info("_get 使用新token重试请求")
                 response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
+                logger.info(f"_get 重试响应 [status={response.status_code}, body_prefix={response.text[:200]}]")
 
         response.raise_for_status()
         result = response.json()
@@ -341,9 +340,11 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
             auth_service.clear_token()
             headers = auth_service.get_auth_headers()
             if headers:
+                logger.info("_get 使用新token重试请求(业务层)")
                 response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
                 response.raise_for_status()
                 result = response.json()
+                logger.info(f"_get 业务重试响应 [body_prefix={response.text[:200]}]")
 
         return _format_date_fields(result)
 
@@ -380,6 +381,7 @@ def register_data_api_tools(mcp: FastMCP):
         """
         logger.info(f"调用 get_rainfall_station_info，收到参数: station={repr(station)}")
         station_code = _resolve_station(station)
+        logger.info(f"get_rainfall_station_info 站码解析结果: station_code={repr(station_code)}")
         if not station_code:
             result = {"code": 400, "data": None, "msg": f"未找到雨量站: {station}"}
         else:
@@ -388,125 +390,132 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_rainfall_station_info 返回结果: {result}")
         return result
 
-    @mcp.tool()
-    async def get_realtime_rainfall(
-        start_time: str,
-        end_time: str
-    ) -> Dict[str, Any]:
-        """
-        获取实时雨量监测数据。
+    # @mcp.tool()
+    # async def get_realtime_rainfall(
+    #     start_time: str,
+    #     end_time: str
+    # ) -> Dict[str, Any]:
+    #     """
+    #     获取实时雨量监测数据。
 
-        Args:
-            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
-            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
+    #     Args:
+    #         start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+    #         end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
 
-        Returns:
-            {
-                "code": 200,      // 状态码
-                "msg": "success", // 消息
-                "data": [
-                    {
-                        "stcd": "40100150",    // 站码
-                        "rf": 4.20,            // 降雨量
-                        "stnm": "吉迈",        // 站名
-                        "lgtd": 99.650000,     // 经度
-                        "lttd": 33.766666     // 纬度
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 get_realtime_rainfall，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}")
-        url = f"{BASE_URL}/rainfall/hourrt/getRainfall"
-        params = {
-            "startTime": start_time,
-            "endTime": end_time
-        }
-        result = _get(url, params)
-        logger.debug(f"get_realtime_rainfall 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,      // 状态码
+    #             "msg": "success", // 消息
+    #             "data": [
+    #                 {
+    #                     "stcd": "40100150",    // 站码
+    #                     "rf": 4.20,            // 降雨量
+    #                     "stnm": "吉迈",        // 站名
+    #                     "lgtd": 99.650000,     // 经度
+    #                     "lttd": 33.766666     // 纬度
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 get_realtime_rainfall，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}")
+    #     url = f"{BASE_URL}/rainfall/hourrt/getRainfall"
+    #     params = {
+    #         "startTime": start_time,
+    #         "endTime": end_time
+    #     }
+    #     result = _get(url, params)
+    #     logger.debug(f"get_realtime_rainfall 返回结果: {result}")
+    #     return result
 
-    @mcp.tool()
-    async def get_daily_rainfall_stats(
-        station: str,
-        start_date: str,
-        end_date: str
-    ) -> Dict[str, Any]:
-        """
-        获取时段日降雨量统计数据。
+    # @mcp.tool()
+    # async def get_daily_rainfall_stats(
+    #     station: str,
+    #     start_date: str,
+    #     end_date: str
+    # ) -> Dict[str, Any]:
+    #     """
+    #     获取时段日降雨量统计数据。
 
-        Args:
-            station: 雨量站名称（支持模糊匹配，必传）
-            start_date: 开始日期（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
-            end_date: 结束日期（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
+    #     Args:
+    #         station: 雨量站名称（支持模糊匹配，必传）
+    #         start_date: 开始日期（必传，默认三天前）。格式: yyyy-MM-dd，例如: "2026-04-15"
+    #         end_date: 结束日期（必传，默认现在）。格式: yyyy-MM-dd，例如: "2026-04-18"
 
-        Returns:
-            {
-                "code": 200,      // 状态码
-                "msg": "",        // 消息
-                "data": [
-                    {
-                        "stcd": "41612117",    // 雨量站码
-                        "rf": 18.50,           // 降雨量
-                        "stnm": "焦河",        // 雨量站名
-                        "lgtd": 111.443000,    // 经度
-                        "lttd": 34.433500     // 纬度
-                    }
-                ]
-            }
-        """
-        logger.info(f"调用 get_daily_rainfall_stats，收到参数: station={repr(station)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
-        station_code = _resolve_station(station)
-        if not station_code:
-            result = {"code": 400, "data": None, "msg": f"未找到雨量站: {station}"}
-        else:
-            url = f"{BASE_URL}/rainfall/dayrt/getRainfall"
-            params = {
-                "stcd": station_code,
-                "startDate": start_date,
-                "endDate": end_date
-            }
-            result = _get(url, params)
-        logger.debug(f"get_daily_rainfall_stats 返回结果: {result}")
-        return result
+    #     Returns:
+    #         {
+    #             "code": 200,      // 状态码
+    #             "msg": "",        // 消息
+    #             "data": [
+    #                 {
+    #                     "stcd": "41612117",    // 雨量站码
+    #                     "rf": 18.50,           // 降雨量
+    #                     "stnm": "焦河",        // 雨量站名
+    #                     "lgtd": 111.443000,    // 经度
+    #                     "lttd": 34.433500     // 纬度
+    #                 }
+    #             ]
+    #         }
+    #     """
+    #     logger.info(f"调用 get_daily_rainfall_stats，收到参数: station={repr(station)}, start_date={repr(start_date)}, end_date={repr(end_date)}")
+    #     station_code = _resolve_station(station)
+    #     if not station_code:
+    #         result = {"code": 400, "data": None, "msg": f"未找到雨量站: {station}"}
+    #     else:
+    #         url = f"{BASE_URL}/rainfall/dayrt/getRainfall"
+    #         params = {
+    #             "stcd": station_code,
+    #             "startDate": start_date,
+    #             "endDate": end_date
+    #         }
+    #         result = _get(url, params)
+    #     logger.debug(f"get_daily_rainfall_stats 返回结果: {result}")
+    #     return result
 
     @mcp.tool()
     async def get_rainfall_statistics(
         start_time: str,
-        end_time: str
+        end_time: str,
+        stnm: str = ""
     ) -> Dict[str, Any]:
         """
-        获取实时雨量统计结果。
+        获取实时雨量站统计结果。
 
         Args:
             start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
             end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
+            stnm: 站点名称（可选，支持模糊匹配）。例如: "羊虎山"、"白沙"、"玛曲"、"唐乃亥"
 
         Returns:
             {
                 "code": 200,
                 "msg": "",
-                "data": {
-                    "avg50": 65.71,           // 50毫米降雨量
-                    "area200": 0,             // 200毫米降雨量笼罩面积
-                    "area100": 0.00,          // 100毫米降雨量笼罩面积
-                    "avg100": 108.61,         // 100毫米降雨量
-                    "maxHour24Rf": 115.50,    // 最大24小时降雨量
-                    "maxHourRf": 30.75,       // 最大小时降雨量
-                    "area50": 0.00,           // 50毫米降雨量笼罩面积
-                    "stcd": "40104435",       // 站码
-                    "rf": 115.50,             // 降雨量
-                    "avg200": 0,              // 200毫米降雨量
-                    "stnm": "羊虎山"          // 站名
-                }
+                "data": [
+                    {
+                        "avg50": 65.71,           // 50毫米降雨量
+                        "area200": 0,             // 200毫米降雨量笼罩面积
+                        "area100": 0.00,          // 100毫米降雨量笼罩面积
+                        "avg100": 108.61,         // 100毫米降雨量
+                        "maxHour24Rf": 115.50,    // 最大24小时降雨量
+                        "maxHourRf": 30.75,       // 最大小时降雨量
+                        "area50": 0.00,           // 50毫米降雨量笼罩面积
+                        "stcd": "40104435",       // 站码
+                        "rf": 115.50,             // 降雨量
+                        "avg200": 0,              // 200毫米降雨量
+                        "stnm": "羊虎山"          // 站名
+                    }
+                ]
             }
         """
-        logger.info(f"调用 get_rainfall_statistics，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}")
+        logger.info(f"调用 get_rainfall_statistics，收到参数: start_time={repr(start_time)}, end_time={repr(end_time)}, stnm={repr(stnm)}")
         url = f"{BASE_URL}/rainfall/hourrth/getRainfall"
         params = {
             "startTime": start_time,
             "endTime": end_time
         }
         result = _get(url, params)
+        if stnm and result.get("code") == 200 and isinstance(result.get("data"), list):
+            result["data"] = [item for item in result["data"] if stnm in item.get("stnm", "")]
+            logger.info(f"get_rainfall_statistics 按 stnm={repr(stnm)} 筛选后，剩余 {len(result['data'])} 条记录")
         logger.debug(f"get_rainfall_statistics 返回结果: {result}")
         return result
 
@@ -1014,7 +1023,7 @@ def register_data_api_tools(mcp: FastMCP):
             params = {"resname": reservoir_code, "startDate": start_date, "endDate": end_date}
             result = _get(url, params)
             result = _add_water_level_description(result, use_max_level=True)
-            _trigger_warning_alert(result)
+            await _trigger_warning_alert(result)
         logger.debug(f"get_reservoir_realtime 返回结果: {result}")
         return result
 
@@ -1201,7 +1210,7 @@ def register_data_api_tools(mcp: FastMCP):
         url = f"{BASE_URL}/hydrometric/rhourrt/listLatest"
         result = _get(url)
         result = _add_water_level_description(result)
-        _trigger_warning_alert(result)
+        await _trigger_warning_alert(result)
         logger.debug(f"get_reservoir_latest_realtime 返回结果: {result}")
         return result
 

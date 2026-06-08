@@ -3,7 +3,7 @@ import random
 import time
 import requests
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from mcp.server.fastmcp import FastMCP
 from src.utils.logger import get_logger
 from src.services.storage.scheme_storage import save_scheme, generate_unique_id
@@ -67,7 +67,7 @@ def register_forecast_models(mcp: FastMCP):
     @mcp.tool()
     async def run_water_forecast_model(station_type: str, station_name: str, start_time: str = None, end_time: str = None) -> dict:
         """
-        执行来水预报模型，根据站点类型调用不同接口获取预报数据。
+        执行设计院的分布式水文来水预报模型，根据站点类型调用不同接口获取预报数据。
 
         Args:
             station_type: 站点类型，可选值: reservoir(水库), hydrology(水文站)
@@ -160,6 +160,18 @@ def register_forecast_models(mcp: FastMCP):
             elif station_type.lower() == "hydrology":
                 station_code = get_hydrology_code(station_name) or ""
             
+            # 过滤掉 level 水位字段
+            raw_data = result.get("data", result)
+            if isinstance(raw_data, list):
+                filtered_data = []
+                for item in raw_data:
+                    if isinstance(item, dict):
+                        filtered_data.append({k: v for k, v in item.items() if k != "level"})
+                    else:
+                        filtered_data.append(item)
+            else:
+                filtered_data = raw_data
+            
             return_value = {
                 "success": True,
                 "station_type": station_type,
@@ -169,7 +181,7 @@ def register_forecast_models(mcp: FastMCP):
                 "end_time": end_time,
                 "command": "FUNC_RUN_WATER_FORECAST_MODEL",
                 "sch_id": sch_id,
-                "forecast_data": result.get("data", result),
+                "forecast_data": filtered_data,
                 "message": f"来水预报模型执行成功，已获取{station_type} {station_name}的预报数据"
             }
             logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
@@ -389,49 +401,52 @@ def register_forecast_models(mcp: FastMCP):
         custom_params: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
-        运行新安江水文模型。
+        运行新安江水文模型，计算目标站点的流量（区间来水）。
 
         Args:
             station_name: 站点名称，支持水库或水文站，如：
                 - 水库：陆浑水库、故县水库、三门峡水库、小浪底水库、河口村水库
                 - 水文站：龙门镇、白马寺、黑石关、花园口
-                系统会自动从数据库加载该站点的默认参数，并查询对应的降雨数据。
-            start_time: 开始时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 08:00:00"
-            end_time: 结束时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 12:00:00"
+                系统会自动从数据库加载该站点的默认参数。
+            start_time: 开始时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2021-10-02 00:00:00"
+            end_time: 结束时间，格式: yyyy-MM-dd HH:mm:ss，例如: "2021-10-07 00:00:00"
             custom_params: 可选的自定义参数，用于覆盖站点默认参数。
                 支持的参数包括：
-                - KC: 流域蒸散发折算系数 (默认: 0.9)
-                - B: 流域蓄水容量分布曲线指数 (默认: 0.4)
-                - UM: 上层张力水容量 (默认: 30mm)
-                - LM: 下层张力水容量 (默认: 80mm)
-                - SM: 自由水容量 (默认: 25mm)
-                - KG: 地下水日出流系数 (默认: 0.3)
-                - KI: 壤中流日出流系数 (默认: 0.3)
-                - BA: 流域面积 (默认: 根据站点)
-                - XE: 马斯京跟法演算参数 (默认: 0.2)
+                - KC: 流域蒸散发折算系数 (默认: 根据站点配置)
+                - B: 流域蓄水容量分布曲线指数 (默认: 根据站点配置)
+                - UM: 上层张力水容量 (默认: 根据站点配置)
+                - LM: 下层张力水容量 (默认: 根据站点配置)
+                - SM: 自由水容量 (默认: 根据站点配置)
+                - KG: 地下水日出流系数 (默认: 根据站点配置)
+                - KI: 壤中流日出流系数 (默认: 根据站点配置)
+                - XE: 马斯京跟法演算参数 (默认: 根据站点配置)
 
         Returns:
             {
                 "success": true,
                 "message": "模型运行成功",
-                "station_info": {
-                    "station_name": "陆浑水库",
-                    "station_type": "reservoir",
-                    "basin_name": "伊洛河",
-                    "basin_area": 349.0
+                "station_info": { ... },
+                "model_params": {                    # 新安江模型使用的完整参数
+                    "KC": {"value": "0.9", "fullName": "流域蒸散发折算系数(KC)"},
+                    "B": {"value": "0.4", "fullName": "流域蓄水容量分布曲线指数(B)"},
+                    "SM": {"value": "25", "fullName": "自由水客量(SM)"},
+                    "KG": {"value": "0.3", "fullName": "地下水日出流系数(KG)"},
+                    "BA": {"value": "349.0", "fullName": "流域面积(BA)"},
+                    "__custom_overrides__": ["KC"]   # 如有自定义覆盖参数，列出被覆盖的键名
                 },
                 "result": {
-                    "start_time": "2026-04-15 08:00:00",
-                    "end_time": "2026-04-15 12:00:00",
-                    "rainfall_data": [10.0, 12.5, 8.3, 15.2],
-                    "discharge": [0.423, 2.056, 4.293, 6.755],
-                    "times": ["2026-04-15 08:00:00", "2026-04-15 09:00:00", ...]
+                    "start_time": "...",
+                    "end_time": "...",
+                    "rainfall_data": [...],          # 加权面雨量（mm/h）
+                    "flow": [...],              # 新安江模型流量（m³/s）
+                    "times": [...]
                 }
             }
         """
         logger.info(f"调用 run_xinanjiang_model，站点: {station_name}，时间范围: {start_time} 至 {end_time}")
         
         from src.services.storage.database.xinanjiang_config_access import XinanjiangModelConfigAccess
+        from src.services.storage.database.connection import get_db
         
         station_config = XinanjiangModelConfigAccess.get_config_by_station(station_name)
         if not station_config:
@@ -444,97 +459,120 @@ def register_forecast_models(mcp: FastMCP):
         
         logger.info(f"站点配置信息: {station_name}({station_type}), 流域: {basin_name}, 面积: {basin_area}km²")
         
-        def _get_rainfall_data(start: str, end: str, retry: bool = True) -> Dict[str, Any]:
-            base_url = getattr(settings, 'DATA_API_BASE_URL', 'http://wt.hxyai.cn/fx')
-            try:
-                url = f"{base_url}/rainfall/hourrth/getRainfall"
-                headers = auth_service.get_auth_headers()
-                params = {"startTime": start, "endTime": end}
+        # -------------------------------------------------------------------
+        # 1. 从本地数据库查询降雨数据，基于雨量站权重计算加权面雨量
+        # -------------------------------------------------------------------
+        def _query_weighted_rainfall_from_db(start: str, end: str) -> Dict[str, Any]:
+            """
+            从本地数据库 rainfall_hourly 表查询逐小时降雨数据，
+            结合 rainfall_stations 表的 weight_area 计算加权平均面雨量。
+
+            返回: {"code": 200, "data": {timestamp: weighted_rainfall}, "station_count": N}
+            """
+            db = get_db()
+            
+            # 查询该时间范围内所有雨量站的逐小时降雨记录
+            hourly_sql = """
+                SELECT rh.station_code, rh.station_name, rh.timestamp, rh.rainfall,
+                       rs.weight_area
+                FROM rainfall_hourly rh
+                LEFT JOIN rainfall_stations rs ON rh.station_code = rs.code
+                WHERE rh.timestamp >= ? AND rh.timestamp < ?
+                ORDER BY rh.timestamp, rh.station_code
+            """
+            raw_records = db.execute_query(hourly_sql, (start, end))
+            
+            if not raw_records:
+                logger.warning(f"数据库查询到 {start}~{end} 无降雨数据")
+                return {"code": 200, "data": {}, "station_count": 0}
+            
+            # 按时间戳分组
+            from collections import defaultdict
+            time_groups = defaultdict(list)
+            station_weights = {}
+            
+            for rec in raw_records:
+                ts = rec['timestamp']
+                station_code = rec['station_code']
+                rainfall = rec['rainfall'] if rec['rainfall'] is not None else 0.0
+                weight_area = rec['weight_area'] if rec['weight_area'] is not None else 0.0
                 
-                logger.info(f"获取降雨数据: {url}, params={params}")
-                response = requests.get(url, params=params, headers=headers, timeout=30)
+                time_groups[ts].append({
+                    'station_code': station_code,
+                    'rainfall': rainfall,
+                    'weight_area': weight_area
+                })
+                if station_code not in station_weights:
+                    station_weights[station_code] = weight_area
+            
+            # 对每个时间步长计算加权平均降雨量
+            weighted_rainfall = {}
+            for ts, records in sorted(time_groups.items()):
+                total_weighted = 0.0
+                total_weight = 0.0
+                for r in records:
+                    w = r['weight_area']
+                    total_weighted += r['rainfall'] * w
+                    total_weight += w
                 
-                if response.status_code == 401 and retry:
-                    logger.warning("数据API认证失败，检查token状态")
-                    if auth_service._token and auth_service._token_expiry > time.time():
-                        logger.info("当前token未过期，但服务器返回401，可能是服务器问题，保留现有token")
-                        return _get_rainfall_data(start, end, retry=False)
-                    else:
-                        logger.info("token已过期，尝试获取新token")
-                        new_token = auth_service.get_token()
-                        if new_token:
-                            return _get_rainfall_data(start, end, retry=False)
-                        else:
-                            logger.error("无法获取新token")
-                
-                response.raise_for_status()
-                result = response.json()
-                
-                if result.get("code") == 200:
-                    logger.info(f"获取降雨数据成功，共{len(result.get('data', []))}条记录")
-                    return result
+                if total_weight > 0:
+                    weighted_rainfall[str(ts)] = round(total_weighted / total_weight, 2)
                 else:
-                    logger.error(f"获取降雨数据失败: {result.get('msg', '未知错误')}")
-                    return result
-                    
-            except requests.exceptions.RequestException as e:
-                logger.error(f"获取降雨数据请求异常: {e}")
-                return {"code": 500, "data": None, "msg": str(e)}
+                    # 无权重信息时使用简单平均
+                    weighted_rainfall[str(ts)] = round(
+                        sum(r['rainfall'] for r in records) / len(records), 2
+                    )
+            
+            logger.info(
+                f"从数据库获取降雨数据成功，涉及 {len(station_weights)} 个雨量站，"
+                f"{len(weighted_rainfall)} 个时段"
+            )
+            
+            return {
+                "code": 200,
+                "data": weighted_rainfall,
+                "station_count": len(station_weights),
+                "stations": list(station_weights.keys())
+            }
         
-        def _generate_simulation_rainfall(length: int, avg_value: float) -> List[float]:
-            if length <= 1:
-                return [avg_value]
+        def _build_rainfall_array(
+            weighted_data: Dict[str, Any],
+            start: str,
+            end: str,
+            hours: int
+        ) -> List[float]:
+            """
+            将加权面雨量字典按时间顺序转为等时段数组。
+            缺少数据的时段用 0 填充。
+            """
+            rainfall_values = []
+            dt_start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
             
-            rainfall = []
+            rainfall_map = weighted_data.get("data", {})
             
-            if length <= 4:
-                for i in range(length):
-                    factor = 0.5 + i * 0.2
-                    rainfall.append(round(avg_value * factor, 2))
-            else:
-                peak_position = length // 2
-                for i in range(length):
-                    distance_from_peak = abs(i - peak_position)
-                    max_distance = max(peak_position, length - 1 - peak_position)
-                    if max_distance > 0:
-                        factor = 1.0 - (distance_from_peak / max_distance) * 0.6
-                    else:
-                        factor = 1.0
-                    rainfall.append(round(avg_value * factor, 2))
+            for i in range(hours):
+                current_ts = (dt_start + timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S")
+                val = rainfall_map.get(current_ts, 0.0)
+                rainfall_values.append(val)
             
-            total = sum(rainfall)
-            if total > 0:
-                scale_factor = (avg_value * length) / total
-                rainfall = [round(v * scale_factor, 2) for v in rainfall]
+            # 如果完全没有数据，使用极小默认值（防止模型报错）
+            if all(v == 0.0 for v in rainfall_values):
+                logger.warning("所有时段降雨量均为0，使用默认值0.1mm")
+                rainfall_values = [0.1] * hours
             
-            logger.info(f"生成模拟降雨序列: {rainfall[:5]}...（共{len(rainfall)}个时段）")
-            return rainfall
+            logger.info(
+                f"构建等时段面雨量数组: 共{len(rainfall_values)}个时段, "
+                f"最大值={max(rainfall_values)}mm, 平均值={round(sum(rainfall_values)/len(rainfall_values), 2)}mm"
+            )
+            return rainfall_values
         
-        def _calculate_average_rainfall(rainfall_data: Dict[str, Any], length: int = 4) -> List[float]:
-            data = rainfall_data.get("data", [])
-            if not data:
-                logger.warning("未获取到降雨数据，使用默认值")
-                return _generate_simulation_rainfall(length, 10.0)
-            
-            rainfall_sum = 0
-            count = 0
-            for record in data:
-                rf = record.get("rf", 0)
-                if rf and isinstance(rf, (int, float)):
-                    rainfall_sum += rf
-                    count += 1
-            
-            if count == 0:
-                logger.warning("未获取到有效降雨量数据，使用默认值")
-                return _generate_simulation_rainfall(length, 10.0)
-            
-            avg_rainfall = round(rainfall_sum / count, 2)
-            logger.info(f"计算得到平均降雨量: {avg_rainfall} mm（时间范围共{length}个时段）")
-            
-            return _generate_simulation_rainfall(length, avg_rainfall)
-        
+        # -------------------------------------------------------------------
+        # 2. 构建模型控制参数
+        # -------------------------------------------------------------------
         def _build_control_params(config: Dict[str, Any], custom: Dict[str, Any] = None) -> Dict[str, Any]:
-            params = {**config}
+            # 过滤掉 SQL 元数据和非参数键，只保留水文参数
+            skip_keys = {'id', 'station_name', 'station_type', 'station_code', 'basin_name', 'basin_area', 'description', 'created_at', 'updated_at'}
+            params = {k: v for k, v in config.items() if k not in skip_keys}
             if custom:
                 params.update(custom)
                 logger.info(f"使用自定义参数覆盖默认值: {custom}")
@@ -560,7 +598,7 @@ def register_forecast_models(mcp: FastMCP):
                     {"type": "float", "name": "CG", "fullName": "地下水日消退系数(CG)", "value": str(params.get('CG', 1))},
                     {"type": "float", "name": "CI", "fullName": "壤中流日消退系数(CI)", "value": str(params.get('CI', 1))},
                     {"type": "float", "name": "CR", "fullName": "日模型河网蓄水消退系数(CR)", "value": str(params.get('CR', 0.2))},
-                    {"type": "double", "name": "BA", "fullName": "流域面积(BA)", "value": str(params.get('basin_area', 101.7298))},
+                    {"type": "double", "name": "BA", "fullName": "流域面积(BA)", "value": str(params.get('basin_area', basin_area))},
                     {"type": "float", "name": "XE", "fullName": "马斯京跟法演算参数(XE)", "value": str(params.get('XE', 0.2))},
                     {"type": "int", "name": "KE", "fullName": "马斯京跟法演算参数(KE)", "value": str(params.get('KE', 1))}
                 ]
@@ -610,6 +648,9 @@ def register_forecast_models(mcp: FastMCP):
                 ]
             }
         
+        # -------------------------------------------------------------------
+        # 主流程
+        # -------------------------------------------------------------------
         try:
             dt_start = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
             dt_end = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
@@ -618,16 +659,34 @@ def register_forecast_models(mcp: FastMCP):
             
             logger.info(f"时间范围: {start_time} 至 {end_time}，共 {hours_diff} 个时段")
             
-            rainfall_api_result = _get_rainfall_data(start_time, end_time)
-            if rainfall_api_result.get("code") != 200:
-                return {"success": False, "message": f"获取降雨数据失败: {rainfall_api_result.get('msg', '未知错误')}", "code": 500}
+            # ---- 步骤1: 从数据库查询降雨数据并计算加权面雨量 ----
+            weighted_rainfall_data = _query_weighted_rainfall_from_db(start_time, end_time)
+            rainfall_values = _build_rainfall_array(weighted_rainfall_data, start_time, end_time, hours_diff)
             
-            rainfall_values = _calculate_average_rainfall(rainfall_api_result, hours_diff)
-            logger.info(f"计算得到等时段面雨量值: {rainfall_values[:5]}...（共{len(rainfall_values)}个时段）")
+            logger.info(
+                f"计算得到等时段加权面雨量: "
+                f"涉及 {weighted_rainfall_data.get('station_count', 0)} 个雨量站"
+            )
             
+            # ---- 步骤2: 构建NC文件参数并调用新安江模型 ----
             ctrl_params = _build_control_params(station_config, custom_params)
             rainfall_data = _build_rainfall_data(rainfall_values, start_time, end_time)
             etp_data = _build_etp_data(len(rainfall_values), start_time, end_time)
+            
+            # 提取模型参数为可读格式（用于返回给调用方）
+            # 过滤掉 BA（流域面积），从数据库读取的数据可能不准确
+            skip_model_params = {"BA"}
+            model_params = {}
+            for item in ctrl_params.get("globalList", []):
+                name = item.get("name", "")
+                if name in skip_model_params:
+                    continue
+                value = item.get("value", "")
+                full_name = item.get("fullName", name)
+                model_params[name] = {"value": value, "fullName": full_name}
+            # 也记录用户自定义覆盖的参数
+            if custom_params:
+                model_params["__custom_overrides__"] = list(custom_params.keys())
             
             if not xinanjiang_auth_service.get_token():
                 return {"success": False, "message": "新安江模型登录失败", "code": 500}
@@ -664,8 +723,12 @@ def register_forecast_models(mcp: FastMCP):
             
             logger.info(f"任务ID: {inc_key}")
             
+            # ---- 步骤3: 轮询等待模型计算结果 ----
             max_polls = 60
             poll_interval = 5
+            discharge = []
+            start_time_result = start_time
+            end_time_result = end_time
             
             for poll_count in range(max_polls):
                 time.sleep(poll_interval)
@@ -699,51 +762,56 @@ def register_forecast_models(mcp: FastMCP):
                     variables_list = parse_result.get("result", {}).get("variablesList", [])
                     global_list = parse_result.get("result", {}).get("globalList", [])
                     
-                    discharge = []
                     for var in variables_list:
                         if var.get("name") == "Q":
                             discharge = [float(v) for v in var.get("arrayValue", [])]
                             break
                     
-                    start_time_result = start_time
-                    end_time_result = end_time
                     for glb in global_list:
                         if glb.get("name") == "BGTM":
                             start_time_result = glb.get("value")
                         elif glb.get("name") == "EDTM":
                             end_time_result = glb.get("value")
                     
-                    times = []
-                    try:
-                        dt_start = datetime.strptime(start_time_result, "%Y-%m-%d %H:%M:%S")
-                        for i in range(len(discharge)):
-                            times.append((dt_start + timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S"))
-                    except:
-                        times = []
+                    break  # 获取结果成功，退出轮询
                     
-                    return {
-                        "success": True,
-                        "message": "新安江模型运行成功",
-                        "command": "FUNC_RUN_XINANJIANG_MODEL",
-                        "station_info": {
-                            "station_name": station_name,
-                            "station_type": station_type,
-                            "station_code": station_code,
-                            "basin_name": basin_name,
-                            "basin_area": basin_area
-                        },
-                        "result": {
-                            "start_time": start_time_result,
-                            "end_time": end_time_result,
-                            "rainfall_data": rainfall_values,
-                            "discharge": discharge,
-                            "times": times
-                        }
-                    }
                 elif status in [4, 5]:
-                    return {"success": False, "message": f"任务失败，状态: {status}", "result": status_result}
+                    return {"success": False, "message": f"新安江模型任务失败，状态: {status}", "result": status_result}
             
-            return {"success": False, "message": f"轮询超时（{max_polls}次）", "inc_key": inc_key}
+            if not discharge:
+                return {"success": False, "message": f"新安江模型轮询超时（{max_polls}次）或未获取到径流结果", "inc_key": inc_key}
+            
+            # ---- 步骤4: 构建时间轴 ----
+            times = []
+            try:
+                dt_ref = datetime.strptime(start_time_result, "%Y-%m-%d %H:%M:%S")
+                for i in range(len(discharge)):
+                    times.append((dt_ref + timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S"))
+            except Exception:
+                times = [(dt_start + timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S") for i in range(len(discharge))]
+            
+            # ---- 步骤5: 返回完整结果 ----
+            response_data = {
+                "success": True,
+                "message": "新安江模型运行成功",
+                "command": "FUNC_RUN_XINANJIANG_MODEL",
+                "station_info": {
+                    "station_name": station_name,
+                    "station_type": station_type,
+                    "station_code": station_code,
+                    "basin_name": basin_name
+                },
+                "model_params": model_params,
+                "result": {
+                    "start_time": start_time_result,
+                    "end_time": end_time_result,
+                    "rainfall_data": rainfall_values,
+                    "flow": discharge,
+                    "times": times
+                }
+            }
+            
+            return response_data
             
         except Exception as e:
             logger.error(f"新安江模型完整流程异常: {e}")

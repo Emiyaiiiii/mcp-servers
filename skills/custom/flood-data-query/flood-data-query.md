@@ -32,8 +32,7 @@ description: 查询防洪四预系统的实时数据，包括水库/水文站水
 | **页面跳转** | `navigate_to_control_guidance_section` | 跳转到指定河段控导页面   |
 | **数据查询** | `get_reservoir_latest_realtime`       | 查询水库最新实时水情     |
 | **数据查询** | `get_river_latest_realtime`           | 查询河道水文站最新实时水情 |
-| **数据查询** | `get_realtime_rainfall`               | 查询实时雨量监测数据    |
-| **数据查询** | `get_daily_rainfall_stats`            | 查询时段日降雨量统计    |
+| **数据查询** | `get_rainfall_statistics`               | 查询实时雨量监测数据    |
 | **数据查询** | `get_reservoir_realtime`              | 查询水库实时水情（指定水库）|
 | **数据查询** | `list_realtime_hydrology`             | 查询水文站实时水情（指定水文站）|
 | **场景控制** | `fly_to_location`                     | 飞向指定水库场景位置    |

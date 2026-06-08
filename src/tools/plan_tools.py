@@ -478,7 +478,7 @@ def register_plan_tools(mcp: FastMCP):
 
             context = {
                 'generation_time': generation_time,
-                'rainfall_situation': rainfall_situation_str if rainfall_situation_str != '待更新' else '【大模型需调用 get_realtime_rainfall 获取雨量数据】',
+                'rainfall_situation': rainfall_situation_str if rainfall_situation_str != '待更新' else '【大模型需调用工具获取雨量数据】',
                 'river_situation': river_situation_str if river_situation_str != '待更新' else '【大模型需调用 get_river_latest_realtime 或 list_realtime_hydrology 获取河道水情数据】',
                 'reservoir_situation': reservoir_situation_str if reservoir_situation_str != '待更新' else '【大模型需调用 get_reservoir_latest_realtime 或 get_reservoir_realtime 获取水库水情数据】',
                 'engineering_situation': engineering_situation_str if engineering_situation_str != '暂无险情' else '【大模型需查询工程险情信息】',
@@ -667,18 +667,32 @@ def register_plan_tools(mcp: FastMCP):
         return result
 
     @mcp.tool()
-    async def query_knowledge_base(query: str, mode: str = "hybrid") -> dict:
+    async def query_knowledge_base(
+        query: str,
+        mode: str = "hybrid",
+        top_k: int = 10
+    ) -> dict:
+        source = "knowledge_base"
         """
-        查询防洪知识库（同时从两个数据源获取）。
+        查询防洪知识库。
 
         Args:
             query: 查询关键词，如: 水库调度, 防洪预演, 预警响应, 应急处置
-            mode: 查询模式，可选: local(本地实体关系), global(全局模式), hybrid(混合模式), naive(向量检索), mix(知识图谱+向量)
+            mode: 知识图谱查询模式，可选: local(本地实体关系), global(全局模式), hybrid(混合模式), naive(向量检索), mix(知识图谱+向量)
+            top_k: 返回结果数量（默认10），混合模式下各数据源各取一半
 
         Returns:
             查询结果，包含entities(实体), relationships(关系), chunks(文本片段), references(参考文献)
         """
-        logger.info(f"调用 query_knowledge_base，收到参数: query={repr(query)}, mode={repr(mode)}")
+        logger.info(f"调用 query_knowledge_base，query={query}, mode={mode}, source={source}, top_k={top_k}")
+        
+        # 根据 source 参数决定查询哪些数据源
+        use_graph = source in ("knowledge_graph", "hybrid")
+        use_kb = source in ("knowledge_base", "hybrid")
+        
+        # 混合模式下各取一半，非混合模式取全部 top_k
+        graph_top_k = top_k // 2 if source == "hybrid" else top_k
+        kb_top_k = top_k - graph_top_k if source == "hybrid" else top_k
         
         # 存储两个数据源的结果
         results = {
@@ -687,35 +701,41 @@ def register_plan_tools(mcp: FastMCP):
         }
         
         # 第一个数据源：知识图谱接口
-        try:
-            payload = {
-                "query": query,
-                "mode": mode,
-                "top_k": 3
-            }
+        if use_graph:
+            try:
+                payload = {
+                    "query": query,
+                    "mode": mode,
+                    "top_k": graph_top_k
+                }
+                
+                response = requests.post(KNOWLEDGE_BASE_API_URL, json=payload, timeout=30)
+                response.raise_for_status()
+                
+                result = response.json()
+                
+                if result.get("status") == "success":
+                    results["knowledge_graph"] = result
+                    logger.debug(f"知识图谱查询成功: {result.get('data', {})}")
+                else:
+                    logger.warning(f"知识图谱查询失败: {result.get('message', '未知错误')}")
             
-            response = requests.post(KNOWLEDGE_BASE_API_URL, json=payload, timeout=30)
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            if result.get("status") == "success":
-                results["knowledge_graph"] = result
-                logger.debug(f"知识图谱查询成功: {result.get('data', {})}")
-            else:
-                logger.warning(f"知识图谱查询失败: {result.get('message', '未知错误')}")
-        
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"调用知识图谱接口失败: {str(e)}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"调用知识图谱接口失败: {str(e)}")
+        else:
+            logger.info("跳过知识图谱查询（source=knowledge_base）")
         
         # 第二个数据源：知识库接口
-        try:
-            knowledge_base_result = enhanced_search_service.search_documents(query, knowledge_base_ids=[3212], top_k=3)
-            if knowledge_base_result:
-                results["knowledge_base"] = knowledge_base_result
-                logger.debug(f"知识库接口查询成功")
-        except Exception as e:
-            logger.warning(f"调用知识库接口失败: {str(e)}")
+        if use_kb:
+            try:
+                knowledge_base_result = enhanced_search_service.search_documents(query, knowledge_base_ids=[3212], top_k=kb_top_k)
+                if knowledge_base_result:
+                    results["knowledge_base"] = knowledge_base_result
+                    logger.debug(f"知识库接口查询成功")
+            except Exception as e:
+                logger.warning(f"调用知识库接口失败: {str(e)}")
+        else:
+            logger.info("跳过知识库查询（source=knowledge_graph）")
         
         # 合并两个数据源的结果
         entities = []
@@ -787,6 +807,8 @@ def register_plan_tools(mcp: FastMCP):
             "success": True,
             "query": query,
             "mode": mode,
+            "source": source,
+            "top_k": top_k,
             "entities": entities,
             "relationships": relationships,
             "chunks": chunks,
@@ -1273,8 +1295,8 @@ def _get_flood_submerge_core(huayuankou_flow: float) -> dict:
             "shandong": {}
         }
 
-        if q <= 4000:
-            result["level"] = "≤4000 m³/s"
+        if q < 6000:
+            result["level"] = "<6000 m³/s"
             result["description"] = "主河道正常行洪，不会漫滩，无村庄围困，无需迁移安置"
             result["henan"] = {
                 "进水村庄数": 0,
@@ -1298,7 +1320,7 @@ def _get_flood_submerge_core(huayuankou_flow: float) -> dict:
                 "备注": "无淹没"
             }
 
-        elif 4000 < q <= 6000:
+        elif 6000 <= q < 8000:
             result["level"] = "6000 m³/s"
             result["description"] = "开始漫滩，河南、山东滩区局部进水、围困"
             result["henan"] = {
@@ -1401,6 +1423,31 @@ def _get_flood_submerge_core(huayuankou_flow: float) -> dict:
         elif 12370 < q <= 15700:
             result["level"] = "15700 m³/s"
             result["description"] = "河南全滩区淹没，山东保持全漫滩"
+            result["henan"] = {
+                "进水村庄数": 1103,
+                "进水人口": 134.30,
+                "水围村庄数": 48,
+                "水围人口": 3.99,
+                "淹没滩地(万亩)": 342.10,
+                "淹没耕地(万亩)": 234.10,
+                "经济损失(亿元)": 507.66,
+                "备注": "全滩区淹没"
+            }
+            result["shandong"] = {
+                "漫滩面积(万亩)": 234.71,
+                "淹没耕地(万亩)": 176.90,
+                "滩区进水数": 109,
+                "自然村进水数": 243,
+                "自然村围困数": 157,
+                "涉及人口": 31.68,
+                "需转移安置": 20.09,
+                "就地就近安置": 11.59,
+                "备注": "全漫滩"
+            }
+
+        elif 15700 < q < 22000:
+            result["level"] = "15700~22000 m³/s（大洪水）"
+            result["description"] = "河南全滩区淹没，山东全漫滩"
             result["henan"] = {
                 "进水村庄数": 1103,
                 "进水人口": 134.30,

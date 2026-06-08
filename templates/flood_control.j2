@@ -29,15 +29,13 @@
 
 ## 五、预警与风险评估
 1. **黄河总体应急响应**：{{ overall_response if overall_response else '无预警' }}
-2. **小浪底预警等级**：{{ xiaolangdi_warning if xiaolangdi_warning else '无预警' }}
-3. **三门峡预警等级**：{{ sanmenxia_warning if sanmenxia_warning else '无预警' }}
+2. **小浪底水库预警等级**：{{ xiaolangdi_warning if xiaolangdi_warning else '无预警' }}
+3. **三门峡水库预警等级**：{{ sanmenxia_warning if sanmenxia_warning else '无预警' }}
 4. **花园口出险等级**：{{ risk_level if risk_level else '正常' }}
-5. **滩区淹没分析**：{{ submerge_analysis if submerge_analysis else '无淹没' }}
 
 ## 六、调度结果与应对措施
-1. **滩区影响**：{{ beach_impact if beach_impact else '待评估' }}
-2. **工情险情预判**：{{ danger_prediction if danger_prediction else '待评估' }}
-3. **应急保障措施**：{{ emergency_measures if emergency_measures else '待部署' }}
+1. **工情险情预判**：{{ danger_prediction if danger_prediction else '待评估' }}
+2. **应急保障措施**：{{ emergency_measures if emergency_measures else '待部署' }}
 
 ## 七、处置建议
 {{ suggestions if suggestions else '请根据实时数据制定具体措施' }}

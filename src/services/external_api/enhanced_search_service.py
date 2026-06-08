@@ -157,7 +157,7 @@ class EnhancedSearchService:
     def search_documents(self, query: str, knowledge_base_ids: list = None, top_k: int = 5) -> Dict[str, Any]:
         """搜索文档"""
         try:
-            url = f"{self._base_url}/api/enhanced_search/documents/multi/"
+            url = f"{self._base_url}/api/enhanced_search/unified/"
             auth_headers = enhanced_search_auth_service.get_auth_headers()
             headers = {
                 **auth_headers,
@@ -169,8 +169,15 @@ class EnhancedSearchService:
             
             payload = {
                 "query": query,
-                "knowledge_base_ids": knowledge_base_ids or [],
-                "top_k": top_k
+                "filters": {
+                    "knowledge_base_ids": knowledge_base_ids or [],
+                    "source_type": "document"
+                },
+                "search_type": "unified",
+                "top_k": top_k,
+                "use_intent_analysis": True,
+                "use_parallel": True,
+                "enable_cache": True
             }
             
             logger.info(f"正在调用增强搜索接口: {url}")

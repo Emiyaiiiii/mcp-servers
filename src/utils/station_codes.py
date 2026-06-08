@@ -216,11 +216,14 @@ def get_station_code(name: str, similarity_threshold: float = 0.6) -> Optional[s
     name = name.strip()
     normalized = _normalize_text(name)
     
+    # 如果别名表中找到但非BDA码，说明该名称不是水库，跳过后续 get_reservoir_code
+    _skip_reservoir = False
     if normalized in _reservoir_aliases:
         code = _reservoir_aliases[normalized]
         if code and not code.startswith('BDA'):
-            return None
-        return code
+            _skip_reservoir = True
+        else:
+            return code
     
     if name.startswith('BDA'):
         r = get_reservoir_code(name, similarity_threshold)
@@ -233,9 +236,10 @@ def get_station_code(name: str, similarity_threshold: float = 0.6) -> Optional[s
         r = get_rainfall_code(name, similarity_threshold)
         return r if r else None
     
-    r = get_reservoir_code(name, similarity_threshold)
-    if r:
-        return r
+    if not _skip_reservoir:
+        r = get_reservoir_code(name, similarity_threshold)
+        if r:
+            return r
     r = get_hydrology_code(name, similarity_threshold)
     if r:
         return r
