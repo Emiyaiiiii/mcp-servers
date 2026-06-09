@@ -677,7 +677,7 @@ def register_plan_tools(mcp: FastMCP):
         查询防洪知识库。
 
         Args:
-            query: 查询关键词，如: 水库调度, 防洪预演, 预警响应, 应急处置
+            query: 查询关键词或问题，如: 水库调度, 防洪预演, 预警响应, 应急处置, 黄河三百问中黄河流域贫困县有多少 
             mode: 知识图谱查询模式，可选: local(本地实体关系), global(全局模式), hybrid(混合模式), naive(向量检索), mix(知识图谱+向量)
             top_k: 返回结果数量（默认10），混合模式下各数据源各取一半
 
@@ -728,7 +728,7 @@ def register_plan_tools(mcp: FastMCP):
         # 第二个数据源：知识库接口
         if use_kb:
             try:
-                knowledge_base_result = enhanced_search_service.search_documents(query, knowledge_base_ids=[3212], top_k=kb_top_k)
+                knowledge_base_result = enhanced_search_service.search_documents(query, knowledge_base_ids=[3,7,8,35,2790,2879,3212], top_k=kb_top_k)
                 if knowledge_base_result:
                     results["knowledge_base"] = knowledge_base_result
                     logger.debug(f"知识库接口查询成功")

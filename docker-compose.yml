@@ -1,9 +1,6 @@
-version: '3.8'
-
 services:
   mcp-server:
     build: .
-    command: uv run python -c "from src.server import run_server; run_server(transport='streamable-http')"
     restart: always
     ports:
       - "8082:8082"
@@ -18,7 +15,7 @@ services:
     networks:
       - mcp-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/mcp/info').read()"]
       interval: 30s
       timeout: 10s
       retries: 3

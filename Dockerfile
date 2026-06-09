@@ -18,7 +18,7 @@ COPY . .
 
 RUN mkdir -p storage logs
 
-RUN uv run python -m src.services.database.init_database
+RUN uv run python -m src.services.storage.database.init_database
 
 ENV PYTHONUNBUFFERED=1
 

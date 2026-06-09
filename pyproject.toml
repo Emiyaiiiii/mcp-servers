@@ -2,7 +2,6 @@
 name = "mcp-servers"
 version = "0.1.0"
 description = "防洪四预 MCP 服务"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=3.2.3",
