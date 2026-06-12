@@ -1,6 +1,7 @@
 services:
   mcp-server:
     build: .
+    container_name: deer-flow-mcp-server
     restart: always
     ports:
       - "8082:8082"
@@ -13,7 +14,7 @@ services:
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
     networks:
-      - mcp-network
+      - deer-flow
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/mcp/info').read()"]
       interval: 30s
@@ -22,8 +23,9 @@ services:
       start_period: 40s
 
 networks:
-  mcp-network:
-    driver: bridge
+  deer-flow:
+    name: deer-flow_deer-flow
+    external: true
 
 volumes:
   mcp-storage:

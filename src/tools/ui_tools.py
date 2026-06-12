@@ -66,8 +66,8 @@ def register_ui_tools(mcp: FastMCP):
 
         Args:
             reservoir_name: 水库名称（必须是中文），例如: "小浪底"、"三门峡"、"陆浑"、"故县"、"河口村"
-            start_time: 开始时间（必传，默认三天前）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
-            end_time: 结束时间（必传，默认现在）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
+            start_time: 用户指定的查询开始时间（必传）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-15 00:00:00"
+            end_time: 用户指定的查询结束时间（必传）。格式: yyyy-MM-dd HH:mm:ss，例如: "2026-04-18 00:00:00"
 
         Returns:
             发送跳转指令的确认信息
@@ -616,7 +616,10 @@ def register_ui_tools(mcp: FastMCP):
             f"""
             SELECT v.id AS village_id,
                    v.village_name,
+                   v.longitude AS village_lng,
+                   v.latitude AS village_lat,
                    r.name AS reservoir_name,
+                   r.code AS reservoir_code,
                    w.water_level,
                    e.evacuation_location,
                    e.evacuation_route,
@@ -632,10 +635,42 @@ def register_ui_tools(mcp: FastMCP):
             village_ids
         )
 
+        # 收集所有涉及的水库编码
+        reservoir_codes = set()
+        for row in rows:
+            if row.get('reservoir_code'):
+                reservoir_codes.add(row['reservoir_code'])
+
+        # 批量查询转移路线坐标
+        route_coords = {}
+        if reservoir_codes:
+            rc_placeholders = ','.join('?' * len(reservoir_codes))
+            route_rows = db.execute_query(
+                f"""
+                SELECT reservoir_code, start_location, end_location,
+                       start_lat, start_lng, end_lat, end_lng
+                FROM evacuation_routes
+                WHERE reservoir_code IN ({rc_placeholders})
+                """,
+                list(reservoir_codes)
+            )
+            for rr in route_rows:
+                rc = rr['reservoir_code']
+                if rc not in route_coords:
+                    route_coords[rc] = []
+                route_coords[rc].append({
+                    "start_location": rr.get('start_location', ''),
+                    "end_location": rr.get('end_location', ''),
+                    "start_lat": float(rr['start_lat']) if rr.get('start_lat') is not None else None,
+                    "start_lng": float(rr['start_lng']) if rr.get('start_lng') is not None else None,
+                    "end_lat": float(rr['end_lat']) if rr.get('end_lat') is not None else None,
+                    "end_lng": float(rr['end_lng']) if rr.get('end_lng') is not None else None,
+                })
+
         routes = []
         for row in rows:
             if row.get('village_id'):
-                routes.append({
+                route_item = {
                     "id": str(row['village_id']),
                     "name": row.get('village_name', ''),
                     "reservoir": row.get('reservoir_name', ''),
@@ -644,7 +679,16 @@ def register_ui_tools(mcp: FastMCP):
                     "evacuation_route": row.get('evacuation_route', ''),
                     "contact_name": row.get('contact_name', ''),
                     "contact_phone": row.get('contact_phone', ''),
-                })
+                }
+                # 如果村庄表有经纬度，带上
+                if row.get('village_lng') is not None and row.get('village_lat') is not None:
+                    route_item["village_lng"] = float(row['village_lng'])
+                    route_item["village_lat"] = float(row['village_lat'])
+                # 如果该水库有转移路线坐标，全部带上
+                rc = row.get('reservoir_code')
+                if rc and rc in route_coords:
+                    route_item["routes"] = route_coords[rc]
+                routes.append(route_item)
 
         data = {
             "routes": routes,

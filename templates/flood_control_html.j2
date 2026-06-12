@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黄河中下游洪水调度预案</title>
+<style>
+    @page {
+        size: A4;
+        margin: 2.54cm 3.18cm 2.54cm 3.18cm;
+    }
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    body {
+        font-family: "仿宋_GB2312", "仿宋", "FangSong", serif;
+        font-size: 14pt;
+        line-height: 1.8;
+        color: #000000;
+        padding: 20px 40px;
+        background: #fff;
+    }
+    /* ===== 封面样式 ===== */
+    .cover-page {
+        text-align: center;
+        padding-top: 120px;
+        page-break-after: always;
+    }
+    .cover-title {
+        font-family: "华文中宋", "STZhongsong", "SimSun", serif;
+        font-size: 32pt;
+        color: #cc0000;
+        letter-spacing: 8px;
+        margin-bottom: 20px;
+    }
+    .cover-subtitle {
+        font-family: "华文中宋", "STZhongsong", "SimSun", serif;
+        font-size: 36pt;
+        color: #cc0000;
+        letter-spacing: 12px;
+        margin-bottom: 60px;
+    }
+    .cover-info {
+        font-size: 15pt;
+        font-weight: bold;
+        margin-top: 200px;
+        line-height: 2.0;
+    }
+    /* ===== 正文样式 ===== */
+    .doc-header {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12pt;
+        font-weight: bold;
+        margin-bottom: 20px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #cc0000;
+    }
+    h1 {
+        font-family: "华文中宋", "STZhongsong", "SimSun", serif;
+        font-size: 22pt;
+        color: #cc0000;
+        text-align: center;
+        margin: 30px 0 20px 0;
+        letter-spacing: 4px;
+    }
+    h2 {
+        font-size: 16pt;
+        font-weight: bold;
+        margin: 25px 0 12px 0;
+        padding-left: 0;
+        color: #000;
+    }
+    h3 {
+        font-size: 14pt;
+        font-weight: bold;
+        margin: 18px 0 10px 0;
+        padding-left: 0;
+    }
+    h4 {
+        font-size: 14pt;
+        font-weight: bold;
+        margin: 14px 0 8px 0;
+    }
+    .section-title {
+        font-size: 16pt;
+        font-weight: bold;
+        margin: 28px 0 14px 0;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #cc0000;
+    }
+    .subsection-title {
+        font-size: 14pt;
+        font-weight: bold;
+        margin: 18px 0 10px 0;
+    }
+    p {
+        margin: 6px 0;
+        text-indent: 2em;
+    }
+    p.no-indent {
+        text-indent: 0;
+    }
+    ul, ol {
+        margin: 6px 0 6px 2em;
+        padding-left: 1em;
+    }
+    li {
+        margin: 3px 0;
+    }
+    /* ===== 表格样式 ===== */
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0 18px 0;
+        font-size: 13pt;
+    }
+    .data-table th {
+        background-color: #f2f2f2;
+        border: 1px solid #333;
+        padding: 8px 12px;
+        text-align: center;
+        font-weight: bold;
+    }
+    .data-table td {
+        border: 1px solid #333;
+        padding: 6px 12px;
+    }
+    .data-table td:first-child {
+        font-weight: bold;
+        text-align: center;
+        width: 30%;
+        background-color: #fafafa;
+    }
+    .data-table td:last-child {
+        text-align: center;
+    }
+    /* ===== 信息卡片 ===== */
+    .info-card {
+        border: 1px solid #cc0000;
+        border-radius: 4px;
+        padding: 14px 18px;
+        margin: 12px 0;
+        background: #fffbfb;
+    }
+    .info-card-title {
+        font-weight: bold;
+        color: #cc0000;
+        margin-bottom: 6px;
+    }
+    /* ===== 状态标签 ===== */
+    .tag {
+        display: inline-block;
+        padding: 1px 10px;
+        border-radius: 3px;
+        font-size: 12pt;
+        font-weight: bold;
+        margin: 0 4px;
+    }
+    .tag-red {
+        background: #cc0000;
+        color: #fff;
+    }
+    .tag-orange {
+        background: #e67e22;
+        color: #fff;
+    }
+    .tag-yellow {
+        background: #f1c40f;
+        color: #333;
+    }
+    .tag-blue {
+        background: #2980b9;
+        color: #fff;
+    }
+    .tag-green {
+        background: #27ae60;
+        color: #fff;
+    }
+    .check-ok {
+        color: #27ae60;
+        font-weight: bold;
+    }
+    .check-fail {
+        color: #cc0000;
+        font-weight: bold;
+    }
+    /* ===== 措施列表 ===== */
+    .measure-block {
+        border-left: 3px solid #cc0000;
+        padding: 10px 16px;
+        margin: 10px 0;
+        background: #f9f9f9;
+    }
+    .measure-block-title {
+        font-weight: bold;
+        margin-bottom: 4px;
+    }
+    /* ===== 页脚 ===== */
+    .footer {
+        margin-top: 40px;
+        padding-top: 10px;
+        border-top: 1px solid #ccc;
+        font-size: 11pt;
+        color: #666;
+        text-align: center;
+    }
+    /* ===== 打印支持 ===== */
+    @media print {
+        body {
+            padding: 0;
+        }
+        .cover-page {
+            padding-top: 100px;
+        }
+    }
+</style>
+</head>
+<body>
+
+<!-- ==================== 封面 ==================== -->
+<div class="cover-page">
+    <div class="cover-title">黄河防汛智能体系统</div>
+    <div class="cover-subtitle">防 汛 预 案</div>
+    <div class="cover-info">
+        <div>项目组</div>
+        <div>日期：{{ generation_time }}</div>
+        <div>编号：DS-{{ generation_time[:10].replace('-', '') }}</div>
+    </div>
+</div>
+
+<!-- ==================== 正文开始 ==================== -->
+
+<div class="doc-header">
+    <span>黄河防汛智能体系统 — 防汛预案</span>
+    <span>编号：DS-{{ generation_time[:10].replace('-', '') }}</span>
+</div>
+
+<!-- ===== 一、基础信息 ===== -->
+<h2>一、基础信息</h2>
+<ul>
+    <li><strong>适用范围：</strong>黄河中下游流域</li>
+    <li><strong>依据文件：</strong>《黄河洪水调度方案》《黄河防汛抗旱应急预案》《河南省黄河滩区运用预案》《山东省黄河滩区运用预案》</li>
+    <li><strong>数据基准：</strong>实时雨水工情、未来3日降雨预报、流域分区面雨量、干支流径流与洪水预报</li>
+    <li><strong>生成时间：</strong>{{ generation_time }}</li>
+</ul>
+
+<!-- ===== 二、实时雨水工情 ===== -->
+<h2>二、实时雨水工情</h2>
+
+<h3>（1）雨情实况</h3>
+<p>{{ rainfall_situation }}</p>
+
+<h3>（2）水情实况</h3>
+
+{% set has_river_data = river_situation and river_situation != '待更新' and river_situation != '【大模型需调用 get_river_latest_realtime 或 list_realtime_hydrology 获取河道水情数据】' %}
+{% set has_reservoir_data = reservoir_situation and reservoir_situation != '待更新' and reservoir_situation != '【大模型需调用 get_reservoir_latest_realtime 或 get_reservoir_realtime 获取水库水情数据】' %}
+
+{% if has_river_data or has_reservoir_data %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>项目</th>
+            <th>指标</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if has_river_data %}
+        <tr>
+            <td>河道水情</td>
+            <td>{{ river_situation }}</td>
+        </tr>
+        {% endif %}
+        {% if has_reservoir_data %}
+        <tr>
+            <td>水库水情</td>
+            <td>{{ reservoir_situation }}</td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>
+{% else %}
+<p>{{ river_situation }}</p>
+<p>{{ reservoir_situation }}</p>
+{% endif %}
+
+<h3>（3）工情险情</h3>
+<p>{{ engineering_situation }}</p>
+
+<!-- ===== 三、预报 ===== -->
+<h2>三、预报</h2>
+
+<h3>（1）降雨预报</h3>
+<p>{{ rainfall_forecast }}</p>
+<p><strong>流域分区面平均雨量：</strong>{{ area_rainfall }}</p>
+
+<h3>（2）洪水预报</h3>
+<ol>
+    <li><strong>上游径流：</strong>{{ upstream_forecast }}</li>
+    <li><strong>中下游洪峰：</strong>{{ downstream_forecast }}</li>
+</ol>
+
+<!-- ===== 四、水库群调度方案 ===== -->
+<h2>四、水库群调度方案</h2>
+
+{% set has_smx = sanmenxia_scheme and sanmenxia_scheme != '【大模型需调用 generate_sanmenxia_scheme 生成三门峡调度方案】' %}
+{% set has_xld = xiaolangdi_scheme and xiaolangdi_scheme != '【大模型需调用 generate_xiaolangdi_scheme 生成小浪底调度方案】' %}
+{% set has_luhun = luhun_scheme and luhun_scheme != '【大模型需根据陆浑水库实时数据补充调度方案】' %}
+{% set has_guxian = guxian_scheme and guxian_scheme != '【大模型需根据故县水库实时数据补充调度方案】' %}
+{% set has_hekoucun = hekoucun_scheme and hekoucun_scheme != '【大模型需根据河口村水库实时数据补充调度方案】' %}
+
+{% if has_smx or has_xld or has_luhun or has_guxian or has_hekoucun %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>水库</th>
+            <th>调度方案</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if has_smx %}
+        <tr>
+            <td>三门峡水库</td>
+            <td style="text-align:left">{{ sanmenxia_scheme }}</td>
+        </tr>
+        {% endif %}
+        {% if has_xld %}
+        <tr>
+            <td>小浪底水库</td>
+            <td style="text-align:left">{{ xiaolangdi_scheme }}</td>
+        </tr>
+        {% endif %}
+        {% if has_luhun %}
+        <tr>
+            <td>陆浑水库</td>
+            <td style="text-align:left">{{ luhun_scheme }}</td>
+        </tr>
+        {% endif %}
+        {% if has_guxian %}
+        <tr>
+            <td>故县水库</td>
+            <td style="text-align:left">{{ guxian_scheme }}</td>
+        </tr>
+        {% endif %}
+        {% if has_hekoucun %}
+        <tr>
+            <td>河口村水库</td>
+            <td style="text-align:left">{{ hekoucun_scheme }}</td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>
+{% else %}
+<ul>
+    <li><strong>三门峡水库：</strong>{{ sanmenxia_scheme }}</li>
+    <li><strong>小浪底水库：</strong>{{ xiaolangdi_scheme }}</li>
+    <li><strong>陆浑水库：</strong>{{ luhun_scheme }}</li>
+    <li><strong>故县水库：</strong>{{ guxian_scheme }}</li>
+    <li><strong>河口村水库：</strong>{{ hekoucun_scheme }}</li>
+</ul>
+{% endif %}
+
+<!-- ===== 五、预警与风险评估 ===== -->
+<h2>五、预警与风险评估</h2>
+
+<h3>（1）黄河总体应急响应</h3>
+<div class="info-card">
+    <div class="info-card-title">响应等级</div>
+    <p class="no-indent">
+        {% set resp = overall_response|string %}
+        {% if 'IV' in resp or 'Ⅳ' in resp or '四级' in resp or '4级' in resp %}
+        <span class="tag tag-blue">{{ overall_response }}</span>
+        {% elif 'III' in resp or 'Ⅲ' in resp or '三级' in resp or '3级' in resp %}
+        <span class="tag tag-yellow">{{ overall_response }}</span>
+        {% elif 'II级' in resp or 'Ⅱ级' in resp or '二级' in resp or '2级' in resp %}
+        <span class="tag tag-orange">{{ overall_response }}</span>
+        {% elif 'I级' in resp or 'Ⅰ级' in resp or '一级' in resp or '1级' in resp %}
+        <span class="tag tag-red">{{ overall_response }}</span>
+        {% else %}
+        {{ overall_response }}
+        {% endif %}
+    </p>
+</div>
+
+<h3>（2）小浪底水库预警等级</h3>
+<div class="info-card">
+    <div class="info-card-title">预警等级</div>
+    <p class="no-indent">
+        {% set xld_w = xiaolangdi_warning|string %}
+        {% if 'IV' in xld_w or 'Ⅳ' in xld_w or '四级' in xld_w %}
+        <span class="tag tag-blue">{{ xiaolangdi_warning }}</span>
+        {% elif 'III' in xld_w or 'Ⅲ' in xld_w or '三级' in xld_w %}
+        <span class="tag tag-yellow">{{ xiaolangdi_warning }}</span>
+        {% elif 'II级' in xld_w or 'Ⅱ级' in xld_w or '二级' in xld_w %}
+        <span class="tag tag-orange">{{ xiaolangdi_warning }}</span>
+        {% elif 'I级' in xld_w or 'Ⅰ级' in xld_w or '一级' in xld_w %}
+        <span class="tag tag-red">{{ xiaolangdi_warning }}</span>
+        {% else %}
+        {{ xiaolangdi_warning }}
+        {% endif %}
+    </p>
+</div>
+
+<h3>（3）三门峡水库预警等级</h3>
+<div class="info-card">
+    <div class="info-card-title">预警等级</div>
+    <p class="no-indent">
+        {% set smx_w = sanmenxia_warning|string %}
+        {% if 'IV' in smx_w or 'Ⅳ' in smx_w or '四级' in smx_w %}
+        <span class="tag tag-blue">{{ sanmenxia_warning }}</span>
+        {% elif 'III' in smx_w or 'Ⅲ' in smx_w or '三级' in smx_w %}
+        <span class="tag tag-yellow">{{ sanmenxia_warning }}</span>
+        {% elif 'II级' in smx_w or 'Ⅱ级' in smx_w or '二级' in smx_w %}
+        <span class="tag tag-orange">{{ sanmenxia_warning }}</span>
+        {% elif 'I级' in smx_w or 'Ⅰ级' in smx_w or '一级' in smx_w %}
+        <span class="tag tag-red">{{ sanmenxia_warning }}</span>
+        {% else %}
+        {{ sanmenxia_warning }}
+        {% endif %}
+    </p>
+</div>
+
+<h3>（4）花园口出险等级</h3>
+<div class="info-card">
+    <div class="info-card-title">出险等级</div>
+    <p class="no-indent">{{ risk_level }}</p>
+</div>
+
+<h3>（5）滩区淹没分析</h3>
+<p>{{ submerge_analysis }}</p>
+
+<!-- ===== 六、调度结果与应对措施 ===== -->
+<h2>六、调度结果与应对措施</h2>
+
+<h3>（1）滩区处置</h3>
+<div class="measure-block">
+    <p class="no-indent">{{ beach_impact }}</p>
+</div>
+
+<h3>（2）工情险情预判</h3>
+<div class="measure-block">
+    <p class="no-indent">{{ danger_prediction }}</p>
+</div>
+
+<h3>（3）应急保障措施</h3>
+<div class="measure-block">
+    <p class="no-indent">{{ emergency_measures }}</p>
+</div>
+
+<!-- ===== 七、处置建议 ===== -->
+<h2>七、处置建议</h2>
+<div class="info-card">
+    <p class="no-indent">{{ suggestions }}</p>
+</div>
+
+<!-- ===== 页脚 ===== -->
+<div class="footer">
+    <p class="no-indent">黄河防汛智能体系统 · 自动生成 | 数据时间基准：{{ generation_time }} | 第 <span class="page-number"></span> 页</p>
+</div>
+
+</body>
+</html>

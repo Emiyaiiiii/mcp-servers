@@ -638,3 +638,22 @@ CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_scheme ON dispatch_timeseries
 CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_station ON dispatch_timeseries(station_code);
 CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_timestamp ON dispatch_timeseries(timestamp);
 CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_metric ON dispatch_timeseries(metric_type);
+
+-- ============================================
+-- 9. 转移路线坐标表
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS evacuation_routes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reservoir_code VARCHAR(50) NOT NULL,
+    start_location VARCHAR(100) NOT NULL,
+    end_location VARCHAR(100) NOT NULL,
+    start_lat DECIMAL(10,6),
+    start_lng DECIMAL(10,6),
+    end_lat DECIMAL(10,6),
+    end_lng DECIMAL(10,6),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(reservoir_code, start_location, end_location)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evacuation_routes_reservoir ON evacuation_routes(reservoir_code);

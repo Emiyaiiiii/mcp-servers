@@ -290,7 +290,8 @@ async def _trigger_warning_alert(data: Dict[str, Any]) -> None:
                     "warning_type": "water_level",
                     "current_value": item.get("level"),
                     "description": item.get("level_desc"),
-                    "level": warning_level
+                    "level": warning_level,
+                    "time": item.get("date")
                 }
                 markers.append(marker)
     
