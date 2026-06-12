@@ -1,6 +1,6 @@
 import json
 import requests
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from src.utils.logger import get_logger
 from src.services.storage.database.data_access import SimulationParamsAccess, LevelCapacityCurveAccess, LevelFlowCurveAccess
 from src.config.settings import settings

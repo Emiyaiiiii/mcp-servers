@@ -1,7 +1,6 @@
 import os
 import uvicorn
-from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
+from fastmcp import FastMCP
 from starlette.routing import WebSocketRoute, Route
 from starlette.responses import FileResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -37,17 +36,8 @@ def index_handler(request):
 
 def create_app() -> FastMCP:
     """创建 FastMCP 应用实例"""
-    # 配置传输安全设置，允许MCP Inspector连接
-    transport_security = TransportSecuritySettings(
-        enable_dns_rebinding_protection=False,  # 禁用DNS重绑定保护以便MCP Inspector连接
-        allowed_hosts=["localhost:*", "127.0.0.1:*", "0.0.0.0:*"],
-        allowed_origins=["http://localhost:*", "http://127.0.0.1:*"],
-    )
-    
     mcp = FastMCP(
         settings.MCP_SERVER_NAME,
-        transport_security=transport_security,
-        stateless_http=True  # 启用无状态HTTP模式，不需要session ID
     )
 
     register_warning_tools(mcp)
@@ -65,8 +55,8 @@ def run_server(transport="streamable-http"):
     """运行 MCP 服务（集成 WebSocket 和前端页面）"""
     mcp_app = create_app()
     
-    # 获取 FastMCP 的 Starlette 应用
-    starlette_app = mcp_app.streamable_http_app()
+    # 获取 FastMCP 的 Starlette 应用（使用 streamable-http 传输方式）
+    starlette_app = mcp_app.http_app(transport='streamable-http', stateless_http=True)
     
     # 添加CORS中间件，允许MCP Inspector连接
     starlette_app.add_middleware(

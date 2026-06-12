@@ -4,7 +4,7 @@ import time
 import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from src.utils.logger import get_logger
 from src.services.storage.scheme_storage import save_scheme, generate_unique_id
 from src.services.external_api.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service

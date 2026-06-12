@@ -3,7 +3,7 @@ from logging import info
 import requests
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Tuple
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from src.config.settings import settings
 from src.utils.station_codes import get_reservoir_code, get_station_code, get_reservoir_station_code
 from src.services.external_api.auth_service import auth_service

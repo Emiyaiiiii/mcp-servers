@@ -1,5 +1,5 @@
 from typing import List
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from src.config.config import config
 from src.services.communication.command_sender import command_sender
 from src.utils.response_helper import success_response, error_response

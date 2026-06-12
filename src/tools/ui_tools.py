@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from src.services.communication.command_sender import command_sender
 from src.services.storage.scheme_storage import get_scheme, get_all_schemes
 from src.utils.station_codes import (
