@@ -30,8 +30,8 @@ def serve_static_file(request):
 
 
 def index_handler(request):
-    """处理根路径和 wkld.html 请求"""
-    return FileResponse(os.path.join(get_frontend_path(), "wkld.html"))
+    """处理根路径和 index.html 请求"""
+    return FileResponse(os.path.join(get_frontend_path(), "index.html"))
 
 
 def create_app() -> FastMCP:
@@ -85,7 +85,7 @@ def run_server(transport="streamable-http"):
     
     print(f"🚀 MCP 服务已启动: http://localhost:8082")
     print(f"📡 WebSocket 端点: ws://localhost:8082/browser")
-    print(f"🌐 前端页面: http://localhost:8082/wkld.html")
+    print(f"🌐 前端页面: http://localhost:8082/index.html")
     
     # 使用 uvicorn 启动应用
     uvicorn.run(
@@ -94,6 +94,8 @@ def run_server(transport="streamable-http"):
         port=8082,
         log_level="info"
     )
+
+mcp = create_app()
 
 if __name__ == "__main__":
     run_server()
