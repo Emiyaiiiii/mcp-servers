@@ -817,3 +817,416 @@ def register_forecast_models(mcp: FastMCP):
             logger.error(f"新安江模型完整流程异常: {e}")
             return {"success": False, "message": str(e), "code": 500}
 
+    @mcp.tool()
+    async def rainfall_similarity_analysis(
+        step: str,
+        basin: str = None,
+        rainfall_id: str = None,
+        start_time: str = None,
+        end_time: str = None,
+        raster_image_url: str = None
+    ) -> dict:
+        """
+        降雨图斑相似性分析模型（统一入口）。
+
+        整体流程分三步：
+        - step="1"：查询各流域最新降雨情况，返回各流域+降雨事件列表，供用户选择。
+        - step="2"：根据用户选择的流域和降雨编号，依次链式执行
+                    ①查询降雨详情 ②计算相似雨 ③查询相似雨图斑图片 ④图斑相似度计算
+                    （顺序固定，不可调整），返回最相似的3场降雨时间段。
+        - step="3"：根据用户选择的某场相似雨时间段，查询对应水文信息，
+                    并与图斑图片URL整合返回。
+
+        Args:
+            step: 流程阶段，可选值: "1"、"2" 或 "3"
+            basin: 流域名称（如：黄河、伊洛河、洛河），在 step="2" 和 step="3" 时必填
+            rainfall_id: 降雨编号（由 step="1" 返回），仅在 step="2" 时必填
+            start_time: 查询起始时间，仅在 step="3" 时必填
+            end_time: 查询结束时间，仅在 step="3" 时必填
+            raster_image_url: 对应时段的图斑图片URL，仅在 step="3" 时必填
+
+        Returns:
+            step="1" 返回各流域最新降雨列表；
+            step="2" 返回链式执行结果，包含降雨详情、相似雨列表、图斑图片、最相似图斑；
+            step="3" 返回水文信息与图斑图片URL整合结果。
+        """
+        logger.info(
+            f"调用 rainfall_similarity_analysis，收到参数: "
+            f"step={repr(step)}, basin={repr(basin)}, rainfall_id={repr(rainfall_id)}"
+        )
+
+        if step not in ("1", "2", "3"):
+            return {
+                "success": False,
+                "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS",
+                "message": f"不支持的 step 参数: {step}，仅支持 '1'、'2' 或 '3'"
+            }
+
+        # -------------------------------------------------------------------
+        # 第一步：查询各流域最新降雨情况
+        # -------------------------------------------------------------------
+        if step == "1":
+            try:
+                # 调用"查询各流域最新降雨情况"接口
+                url = "http://36.99.160.89:8066/rain/getLatestRainList"
+                
+                logger.info(f"调用查询最新降雨接口: {url}")
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                
+                result = response.json()
+                logger.info(f"接口返回结果: {result}")
+                
+                if result.get("code") != 200:
+                    raise Exception(f"接口返回错误: {result.get('msg', '未知错误')}")
+                
+                raw_data = result.get("data", [])
+                
+                # 转换为 skill 文档定义的格式
+                basins_dict = {}
+                for item in raw_data:
+                    watershed_name = item.get("watershedName", "")
+                    if watershed_name not in basins_dict:
+                        basins_dict[watershed_name] = {
+                            "basin_name": watershed_name,
+                            "basin_code": "",
+                            "rainfall_events": []
+                        }
+                    
+                    basins_dict[watershed_name]["rainfall_events"].append({
+                        "rainfall_id": str(item.get("id", "")),
+                        "start_time": item.get("startTime", ""),
+                        "end_time": item.get("endTime", ""),
+                        "total_rainfall": item.get("precipitationTotal", 0),
+                        "description": f"降雨时段: {item.get('startTime', '')} 至 {item.get('endTime', '')}"
+                    })
+                
+                basins_with_rainfall = list(basins_dict.values())
+                
+                return_value = {
+                    "success": True,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP1",
+                    "step": "1",
+                    "basins": basins_with_rainfall,
+                    "message": "已查询到各流域最新降雨情况，请选择目标流域和降雨事件"
+                }
+                logger.debug(f"rainfall_similarity_analysis step=1 返回结果: {return_value}")
+                return return_value
+            except Exception as e:
+                logger.error(f"查询各流域最新降雨情况失败: {e}")
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP1",
+                    "message": f"查询各流域最新降雨情况失败: {str(e)}"
+                }
+
+        # -------------------------------------------------------------------
+        # 第二步：链式执行 详情→相似雨→图斑→图斑相似度
+        # -------------------------------------------------------------------
+        if step == "2":
+            if not basin or not rainfall_id:
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP2",
+                    "message": "step=2 时 basin 和 rainfall_id 均为必填参数"
+                }
+
+            steps_result = {}
+
+            # ---- 2.1 查询降雨详情 ----
+            try:
+                # 调用"按降雨编号查询降雨详情"接口
+                url = f"http://36.99.160.89:8066/rain/getRainDetailById?id={rainfall_id}"
+
+                logger.info(f"调用查询降雨详情接口: {url}")
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+
+                result = response.json()
+                logger.info(f"降雨详情接口返回结果: {result}")
+
+                if result.get("code") != 200:
+                    raise Exception(f"接口返回错误: {result.get('msg', '未知错误')}")
+
+                rainfall_detail = result.get("data", {})
+                steps_result["rainfall_detail"] = rainfall_detail
+            except Exception as e:
+                logger.error(f"查询降雨详情失败: {e}")
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP2",
+                    "step": "2.1",
+                    "message": f"查询降雨详情失败: {str(e)}",
+                    "basin": basin,
+                    "rainfall_id": rainfall_id
+                }
+
+            # ---- 2.2 计算相似雨 ----
+            try:
+                # 调用"计算相似雨"接口
+                url = "http://36.99.160.89:10017/tbapi/data/analyse/conformAnalysis"
+
+                # 构建请求体：使用上一步获取的降雨详情，添加流域名称字段
+                request_data = rainfall_detail.copy()
+                request_data["rvnm"] = basin  # 添加流域名称
+
+                logger.info(f"调用计算相似雨接口: {url}")
+                logger.info(f"请求体: {request_data}")
+
+                response = requests.post(url, json=request_data, headers={"Content-Type": "application/json"}, timeout=60)
+                response.raise_for_status()
+
+                result = response.json()
+                logger.info(f"相似雨计算接口返回结果: {result}")
+
+                if result.get("code") != 200:
+                    raise Exception(f"接口返回错误: {result.get('msg', '未知错误')}")
+
+                # 假设返回的data字段包含相似雨列表
+                similar_rainfall_list = result.get("data", [])
+                steps_result["similar_rainfall"] = similar_rainfall_list
+            except Exception as e:
+                logger.error(f"计算相似雨失败: {e}")
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP2",
+                    "step": "2.2",
+                    "message": f"计算相似雨失败: {str(e)}",
+                    "basin": basin,
+                    "rainfall_id": rainfall_id,
+                    "partial_result": steps_result
+                }
+
+            # ---- 2.3 查询相似雨图斑图片 ----
+            try:
+                # 调用"查询降雨图斑图片"接口
+                url = "http://36.99.160.89:10017/tbapi/data/getInfo"
+
+                # 从降雨详情中提取当前降雨时段
+                prototype_start = rainfall_detail.get("rainfallDate", "")
+                prototype_end = rainfall_detail.get("endRainfallDate", "")
+
+                # 构建请求体
+                request_data = {
+                    "requestData": False,
+                    "requestContour": False,
+                    "requestImage": True,
+                    "basin": basin,
+                    "prototypePeriod": {
+                        "period": {
+                            "ftm": prototype_start.split(" ")[0] if prototype_start else "",
+                            "ttm": prototype_end.split(" ")[0] if prototype_end else ""
+                        },
+                        "eigenPeriods": []
+                    },
+                    "similarPeriods": []
+                }
+
+                # 从相似雨列表中提取每场雨的时段
+                if isinstance(similar_rainfall_list, list):
+                    for item in similar_rainfall_list:
+                        start_time = item.get("rainfallDate", "")
+                        end_time = item.get("endRainfallDate", "")
+                        request_data["similarPeriods"].append({
+                            "period": {
+                                "ftm": start_time.split(" ")[0] if start_time else "",
+                                "ttm": end_time.split(" ")[0] if end_time else ""
+                            },
+                            "eigenPeriods": []
+                        })
+
+                logger.info(f"调用查询图斑图片接口: {url}")
+                logger.info(f"请求体: {request_data}")
+
+                response = requests.post(url, json=request_data, headers={"Content-Type": "application/json"}, timeout=60)
+                response.raise_for_status()
+
+                result = response.json()
+                logger.info(f"图斑图片接口返回结果: {result}")
+
+                raster_images = result
+                steps_result["rainfall_raster_images"] = raster_images
+            except Exception as e:
+                logger.error(f"查询降雨图斑图片失败: {e}")
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP2",
+                    "step": "2.3",
+                    "message": f"查询降雨图斑图片失败: {str(e)}",
+                    "basin": basin,
+                    "rainfall_id": rainfall_id,
+                    "partial_result": steps_result
+                }
+
+            # ---- 2.4 图斑相似度计算 ----
+            try:
+                # 调用"图斑相似度计算"接口
+                url = "http://36.99.160.89:10017/wpi/process"
+
+                # 提取图斑图片URL列表
+                urls = []
+
+                # 添加当前降雨图斑（prototypeInfo的contourImage）
+                prototype_data = raster_images.get("data", {})
+                prototype_info = prototype_data.get("prototypeInfo", {})
+                prototype_rain_info = prototype_info.get("rainInfo", {})
+                prototype_image_url = prototype_rain_info.get("contourImage", "")
+                if prototype_image_url:
+                    urls.append(prototype_image_url.strip())
+
+                # 添加相似雨图斑（similarInfos中每个的contourImage）
+                similar_infos = prototype_data.get("similarInfos", [])
+                if isinstance(similar_infos, list):
+                    for similar_item in similar_infos:
+                        rain_info = similar_item.get("rainInfo", {})
+                        image_url = rain_info.get("contourImage", "")
+                        if image_url:
+                            urls.append(image_url.strip())
+
+                # 构建请求体
+                request_data = {"urls": urls}
+
+                logger.info(f"调用图斑相似度计算接口: {url}")
+                logger.info(f"请求体: {request_data}")
+
+                response = requests.post(url, json=request_data, headers={"Content-Type": "application/json"}, timeout=60)
+                response.raise_for_status()
+
+                result = response.json()
+                logger.info(f"图斑相似度计算接口返回结果: {result}")
+
+                # 返回结果是最相似的降雨时间列表
+                most_similar_raster = result
+                steps_result["most_similar_raster"] = most_similar_raster
+            except Exception as e:
+                logger.error(f"图斑相似度计算失败: {e}")
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP2",
+                    "step": "2.4",
+                    "message": f"图斑相似度计算失败: {str(e)}",
+                    "basin": basin,
+                    "rainfall_id": rainfall_id,
+                    "partial_result": steps_result
+                }
+
+            # ---- 2.5 数据精简处理 ----
+            try:
+                # 精简 rainfall_detail：删除空字段和大字段
+                if "rainfall_detail" in steps_result:
+                    detail = steps_result["rainfall_detail"]
+                    # 删除空字段和大字段
+                    for key in ["lookLikePoint", "resemblance", "maxRainfallStnm", "timeRainfallQ", "rainfallParameters"]:
+                        if key in detail:
+                            del detail[key]
+                    steps_result["rainfall_detail"] = detail
+
+                # 精简 rainfall_raster_images：删除大字段 contour 和接口元信息
+                if "rainfall_raster_images" in steps_result:
+                    raster_data = steps_result["rainfall_raster_images"]
+                    # 删除接口元信息
+                    for key in ["respCode", "respMsg", "elapsed", "extraData"]:
+                        if key in raster_data:
+                            del raster_data[key]
+                    # 删除 prototypeInfo 中的 contour
+                    if "data" in raster_data:
+                        data = raster_data["data"]
+                        if "prototypeInfo" in data:
+                            proto_info = data["prototypeInfo"]
+                            if "rainInfo" in proto_info:
+                                rain_info = proto_info["rainInfo"]
+                                if "contour" in rain_info:
+                                    del rain_info["contour"]
+                        # 删除 similarInfos 中的 contour
+                        if "similarInfos" in data:
+                            for similar_item in data["similarInfos"]:
+                                if "rainInfo" in similar_item:
+                                    rain_info = similar_item["rainInfo"]
+                                    if "contour" in rain_info:
+                                        del rain_info["contour"]
+                    steps_result["rainfall_raster_images"] = raster_data
+
+                # 精简 similar_rainfall：删除空字段和 rainfallParameters
+                if "similar_rainfall" in steps_result:
+                    similar_list = steps_result["similar_rainfall"]
+                    for item in similar_list:
+                        for key in ["lookLikePoint", "resemblance", "maxRainfallStnm", "timeRainfallQ", "rainfallParameters"]:
+                            if key in item:
+                                del item[key]
+                    steps_result["similar_rainfall"] = similar_list
+
+            except Exception as e:
+                logger.warning(f"数据精简处理失败，将返回原始数据: {e}")
+
+            return_value = {
+                "success": True,
+                "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP2",
+                "step": "2",
+                "basin": basin,
+                "rainfall_id": rainfall_id,
+                "steps": steps_result,
+                "message": "图斑相似性分析完成"
+            }
+            logger.debug(f"rainfall_similarity_analysis step=2 返回结果: {return_value}")
+            return return_value
+
+        # -------------------------------------------------------------------
+        # 第三步：根据用户选择的相似雨时间段查询水文信息并整合图斑图片
+        # -------------------------------------------------------------------
+        if step == "3":
+            if not all([basin, start_time, end_time, raster_image_url]):
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP3",
+                    "step": "3",
+                    "message": "step=3 需要 basin、start_time、end_time、raster_image_url 参数"
+                }
+
+            try:
+                # 3.1 调用"查询水文信息"接口
+                url = "http://36.99.160.89:10017/api/hyd/getByBasinNameListAndTime"
+                request_data = {
+                    "basinNameList": [basin],
+                    "startTime": start_time,
+                    "endTime": end_time
+                }
+
+                logger.info(f"调用查询水文信息接口: {url}")
+                logger.info(f"请求体: {request_data}")
+
+                response = requests.post(url, json=request_data, headers={"Content-Type": "application/json"}, timeout=60)
+                response.raise_for_status()
+
+                result = response.json()
+                logger.info(f"水文信息接口返回结果: {result}")
+
+                if result.get("code") != 200:
+                    raise Exception(f"接口返回错误: {result.get('msg', '未知错误')}")
+
+                hydrological_data = result.get("data", [])
+
+                return {
+                    "success": True,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP3",
+                    "step": "3",
+                    "basin": basin,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "hydrological_data": hydrological_data,
+                    "raster_image_url": raster_image_url,
+                    "message": "已查询到对应时段的水文信息，并与图斑图片URL整合"
+                }
+
+            except Exception as e:
+                logger.error(f"查询水文信息失败: {e}")
+                return {
+                    "success": False,
+                    "command": "FUNC_RAINFALL_SIMILARITY_ANALYSIS_STEP3",
+                    "step": "3",
+                    "message": f"查询水文信息失败: {str(e)}",
+                    "basin": basin,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "raster_image_url": raster_image_url
+                }
+
