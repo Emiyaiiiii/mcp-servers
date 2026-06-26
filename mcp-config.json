@@ -2,9 +2,9 @@
   "mcpServers": {
     "flood-control": {
       "transport": "stdio",
-      "command": "uv",
+      "command": "C:\\Users\\遥遥领先\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\uv.exe",
       "args": ["run", "mcp-server"],
-      "cwd": "/mnt/d/workspace/Flood-Control-Four-Pre-System/mcp-servers"
+      "cwd": "D:\\code\\mcp-servers"
     }
   }
 }

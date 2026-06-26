@@ -1,0 +1,919 @@
+{
+  "test_summary": {
+    "total": 11,
+    "passed": 8,
+    "business_failed": 3,
+    "failed": 0,
+    "pass_rate": "72.7%",
+    "start_time": "2026-06-23T21:24:17.606889",
+    "end_time": "2026-06-23T21:24:25.312889"
+  },
+  "test_results": [
+    {
+      "id": "Q01",
+      "description": "查看当前调度参数",
+      "tool": "modify_dispatch_param",
+      "expected": "返回全部 46 条参数记录",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:17.606889",
+      "end_time": "2026-06-23T21:24:17.861787",
+      "duration_ms": 254.9,
+      "request": {
+        "action": "list"
+      },
+      "response": "{'success': True, 'total_params': 46, 'params': [{'stcd': 1, 'stnm': '东平湖', 'Control_Par': 1.0, 'Instruction': '0表示不分洪，1表示分洪'}, {'stcd': 2, 'stnm': '北金堤', 'Control_Par': 1.0, 'Instruction': '0表示不分洪，1表",
+      "response_data": {
+        "success": true,
+        "total_params": 46,
+        "params": [
+          {
+            "stcd": 1,
+            "stnm": "东平湖",
+            "Control_Par": 1.0,
+            "Instruction": "0表示不分洪，1表示分洪"
+          },
+          {
+            "stcd": 2,
+            "stnm": "北金堤",
+            "Control_Par": 1.0,
+            "Instruction": "0表示不分洪，1表示分洪"
+          },
+          {
+            "stcd": 3,
+            "stnm": "三门峡",
+            "Control_Par": 295.0,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 4,
+            "stnm": "小浪底",
+            "Control_Par": 250.86000061035156,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 5,
+            "stnm": "陆浑",
+            "Control_Par": 316.2099914550781,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 6,
+            "stnm": "故县",
+            "Control_Par": 524.1900024414062,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 7,
+            "stnm": "河口村",
+            "Control_Par": 234.33999633789062,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 8,
+            "stnm": "三门峡",
+            "Control_Par": 0.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 9,
+            "stnm": "小浪底",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 10,
+            "stnm": "陆浑",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 11,
+            "stnm": "故县",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 12,
+            "stnm": "河口村",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 13,
+            "stnm": "三门峡",
+            "Control_Par": 335.0,
+            "Instruction": "防洪高水位"
+          },
+          {
+            "stcd": 14,
+            "stnm": "小浪底",
+            "Control_Par": 275.0,
+            "Instruction": "防洪高水位"
+          },
+          {
+            "stcd": 15,
+            "stnm": "陆浑",
+            "Control_Par": 323.0,
+            "Instruction": "蓄洪限制水位"
+          },
+          {
+            "stcd": 16,
+            "stnm": "故县",
+            "Control_Par": 546.8400268554688,
+            "Instruction": "蓄洪限制水位"
+          },
+          {
+            "stcd": 17,
+            "stnm": "河口村",
+            "Control_Par": 285.42999267578125,
+            "Instruction": "蓄洪限制水位"
+          },
+          {
+            "stcd": 18,
+            "stnm": "三门峡",
+            "Control_Par": 1.0,
+            "Instruction": "0表示完全自由敞泄关闭，1表示打开"
+          },
+          {
+            "stcd": 19,
+            "stnm": "小浪底",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 20,
+            "stnm": "陆浑",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 21,
+            "stnm": "故县",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 22,
+            "stnm": "河口村",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 23,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "预泄控制花园口流量"
+          },
+          {
+            "stcd": 24,
+            "stnm": "陆浑",
+            "Control_Par": 300.0,
+            "Instruction": "预泄流量"
+          },
+          {
+            "stcd": 25,
+            "stnm": "故县",
+            "Control_Par": 300.0,
+            "Instruction": "预泄流量"
+          },
+          {
+            "stcd": 26,
+            "stnm": "河口村",
+            "Control_Par": 100.0,
+            "Instruction": "预泄流量"
+          },
+          {
+            "stcd": 27,
+            "stnm": "河口村",
+            "Control_Par": 275.0,
+            "Instruction": "花园口12000关门的最高水位"
+          },
+          {
+            "stcd": 28,
+            "stnm": "三门峡",
+            "Control_Par": 26.0,
+            "Instruction": "下大洪水，三门峡给小浪底帮忙要求的小浪底蓄洪量"
+          },
+          {
+            "stcd": 29,
+            "stnm": "小浪底",
+            "Control_Par": 254.0,
+            "Instruction": "4500转控10000的判别水位"
+          },
+          {
+            "stcd": 30,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "保滩流量"
+          },
+          {
+            "stcd": 31,
+            "stnm": "小浪底",
+            "Control_Par": 300.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 32,
+            "stnm": "陆浑",
+            "Control_Par": 1000.0,
+            "Instruction": "20年一遇以下洪水控制流量"
+          },
+          {
+            "stcd": 33,
+            "stnm": "陆浑",
+            "Control_Par": 0.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 34,
+            "stnm": "故县",
+            "Control_Par": 1000.0,
+            "Instruction": "20年一遇以下洪水控制流量"
+          },
+          {
+            "stcd": 35,
+            "stnm": "故县",
+            "Control_Par": 0.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 36,
+            "stnm": "河口村",
+            "Control_Par": 2000.0,
+            "Instruction": "254.5m以下控制武陟流量"
+          },
+          {
+            "stcd": 37,
+            "stnm": "河口村",
+            "Control_Par": 0.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 38,
+            "stnm": "花园口",
+            "Control_Par": 4500.0,
+            "Instruction": "判别库群退水时刻设置的花园口流量阈值"
+          },
+          {
+            "stcd": 39,
+            "stnm": "花园口",
+            "Control_Par": 4500.0,
+            "Instruction": "下大洪水，退水过程控制的花园口流量"
+          },
+          {
+            "stcd": 40,
+            "stnm": "小浪底",
+            "Control_Par": 200.0,
+            "Instruction": "上大洪水，小浪底开门敞泄的滞蓄洪量阈值"
+          },
+          {
+            "stcd": 41,
+            "stnm": "陆浑",
+            "Control_Par": 321.5,
+            "Instruction": "保本流域20年一遇的水位"
+          },
+          {
+            "stcd": 42,
+            "stnm": "故县",
+            "Control_Par": 542.0399780273438,
+            "Instruction": "保本流域21年一遇的水位"
+          },
+          {
+            "stcd": 43,
+            "stnm": "花园口",
+            "Control_Par": 12000.0,
+            "Instruction": "判别支流水库关门时刻的花园口流量"
+          },
+          {
+            "stcd": 44,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "小浪底保滩库容用完后，转控花园口的流量"
+          },
+          {
+            "stcd": 45,
+            "stnm": "花园口",
+            "Control_Par": 200.0,
+            "Instruction": "上大洪水，小浪底敞泄结束，花园口流量达到的超万洪量（此时东平湖认为已装满）"
+          },
+          {
+            "stcd": 46,
+            "stnm": "洪水类型",
+            "Control_Par": 1.0,
+            "Instruction": "0为上大洪水，1为下大洪水"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "Q04",
+      "description": "把小浪底改为敞泄模式",
+      "tool": "modify_dispatch_param",
+      "expected": "更新 Control_Par=0",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:17.861787",
+      "end_time": "2026-06-23T21:24:17.983644",
+      "duration_ms": 121.86,
+      "request": {
+        "action": "update",
+        "station_name": "小浪底",
+        "param_desc": "控泄",
+        "new_value": 0
+      },
+      "response": "{'success': True, 'message': '参数已更新', 'before': {'stcd': 9, 'stnm': '小浪底', 'Control_Par': 1.0, 'Instruction': '0表示敞泄，1表示控泄'}, 'after': {'stcd': 9, 'stnm': '小浪底', 'Control_Par': 0.0, 'Instruction': '0表",
+      "response_data": {
+        "success": true,
+        "message": "参数已更新",
+        "before": {
+          "stcd": 9,
+          "stnm": "小浪底",
+          "Control_Par": 1.0,
+          "Instruction": "0表示敞泄，1表示控泄"
+        },
+        "after": {
+          "stcd": 9,
+          "stnm": "小浪底",
+          "Control_Par": 0.0,
+          "Instruction": "0表示敞泄，1表示控泄"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "Q04-R",
+      "description": "恢复小浪底控泄设置",
+      "tool": "modify_dispatch_param",
+      "expected": "恢复 Control_Par=1",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:17.983644",
+      "end_time": "2026-06-23T21:24:18.093576",
+      "duration_ms": 109.93,
+      "request": {
+        "action": "update",
+        "station_name": "小浪底",
+        "param_desc": "控泄",
+        "new_value": 1
+      },
+      "response": "{'success': True, 'message': '参数已更新', 'before': {'stcd': 9, 'stnm': '小浪底', 'Control_Par': 0.0, 'Instruction': '0表示敞泄，1表示控泄'}, 'after': {'stcd': 9, 'stnm': '小浪底', 'Control_Par': 1.0, 'Instruction': '0表",
+      "response_data": {
+        "success": true,
+        "message": "参数已更新",
+        "before": {
+          "stcd": 9,
+          "stnm": "小浪底",
+          "Control_Par": 0.0,
+          "Instruction": "0表示敞泄，1表示控泄"
+        },
+        "after": {
+          "stcd": 9,
+          "stnm": "小浪底",
+          "Control_Par": 1.0,
+          "Instruction": "0表示敞泄，1表示控泄"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "Q05",
+      "description": "将小浪底初始水位改成 250.5",
+      "tool": "modify_dispatch_param",
+      "expected": "更新 Control_Par=250.5",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.093576",
+      "end_time": "2026-06-23T21:24:18.218662",
+      "duration_ms": 125.09,
+      "request": {
+        "action": "update",
+        "station_name": "小浪底",
+        "param_desc": "初始水位",
+        "new_value": 250.5
+      },
+      "response": "{'success': True, 'message': '参数已更新', 'before': {'stcd': 4, 'stnm': '小浪底', 'Control_Par': 250.86000061035156, 'Instruction': '初始水位'}, 'after': {'stcd': 4, 'stnm': '小浪底', 'Control_Par': 250.5, 'Instruc",
+      "response_data": {
+        "success": true,
+        "message": "参数已更新",
+        "before": {
+          "stcd": 4,
+          "stnm": "小浪底",
+          "Control_Par": 250.86000061035156,
+          "Instruction": "初始水位"
+        },
+        "after": {
+          "stcd": 4,
+          "stnm": "小浪底",
+          "Control_Par": 250.5,
+          "Instruction": "初始水位"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "Q05-R",
+      "description": "恢复小浪底初始水位",
+      "tool": "modify_dispatch_param",
+      "expected": "恢复 Control_Par=250.86",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.218662",
+      "end_time": "2026-06-23T21:24:18.345504",
+      "duration_ms": 126.84,
+      "request": {
+        "action": "update",
+        "station_name": "小浪底",
+        "param_desc": "初始水位",
+        "new_value": 250.86
+      },
+      "response": "{'success': True, 'message': '参数已更新', 'before': {'stcd': 4, 'stnm': '小浪底', 'Control_Par': 250.5, 'Instruction': '初始水位'}, 'after': {'stcd': 4, 'stnm': '小浪底', 'Control_Par': 250.86, 'Instruction': '初始水位",
+      "response_data": {
+        "success": true,
+        "message": "参数已更新",
+        "before": {
+          "stcd": 4,
+          "stnm": "小浪底",
+          "Control_Par": 250.5,
+          "Instruction": "初始水位"
+        },
+        "after": {
+          "stcd": 4,
+          "stnm": "小浪底",
+          "Control_Par": 250.86,
+          "Instruction": "初始水位"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "Q09",
+      "description": "将洪水类型切换为上大洪水",
+      "tool": "modify_dispatch_param",
+      "expected": "更新 Control_Par=0",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.345504",
+      "end_time": "2026-06-23T21:24:18.467294",
+      "duration_ms": 121.79,
+      "request": {
+        "action": "update",
+        "station_name": "洪水类型",
+        "param_desc": "上大洪水",
+        "new_value": 0
+      },
+      "response": "{'success': True, 'message': '参数已更新', 'before': {'stcd': 46, 'stnm': '洪水类型', 'Control_Par': 1.0, 'Instruction': '0为上大洪水，1为下大洪水'}, 'after': {'stcd': 46, 'stnm': '洪水类型', 'Control_Par': 0.0, 'Instruction",
+      "response_data": {
+        "success": true,
+        "message": "参数已更新",
+        "before": {
+          "stcd": 46,
+          "stnm": "洪水类型",
+          "Control_Par": 1.0,
+          "Instruction": "0为上大洪水，1为下大洪水"
+        },
+        "after": {
+          "stcd": 46,
+          "stnm": "洪水类型",
+          "Control_Par": 0.0,
+          "Instruction": "0为上大洪水，1为下大洪水"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "Q09-R",
+      "description": "恢复洪水类型为下大洪水",
+      "tool": "modify_dispatch_param",
+      "expected": "恢复 Control_Par=1",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.467294",
+      "end_time": "2026-06-23T21:24:18.591824",
+      "duration_ms": 124.53,
+      "request": {
+        "action": "update",
+        "station_name": "洪水类型",
+        "param_desc": "下大洪水",
+        "new_value": 1
+      },
+      "response": "{'success': True, 'message': '参数已更新', 'before': {'stcd': 46, 'stnm': '洪水类型', 'Control_Par': 0.0, 'Instruction': '0为上大洪水，1为下大洪水'}, 'after': {'stcd': 46, 'stnm': '洪水类型', 'Control_Par': 1.0, 'Instruction",
+      "response_data": {
+        "success": true,
+        "message": "参数已更新",
+        "before": {
+          "stcd": 46,
+          "stnm": "洪水类型",
+          "Control_Par": 0.0,
+          "Instruction": "0为上大洪水，1为下大洪水"
+        },
+        "after": {
+          "stcd": 46,
+          "stnm": "洪水类型",
+          "Control_Par": 1.0,
+          "Instruction": "0为上大洪水，1为下大洪水"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "Q11",
+      "description": "修改不存在的站点参数",
+      "tool": "modify_dispatch_param",
+      "expected": "返回错误，提示站点不存在",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.591824",
+      "end_time": "2026-06-23T21:24:18.717559",
+      "duration_ms": 125.74,
+      "request": {
+        "action": "update",
+        "station_name": "不存在的站点",
+        "param_desc": "水位",
+        "new_value": 100
+      },
+      "response": "{'success': False, 'error': '未找到匹配的参数：站点=不存在的站点，关键词=水位', 'available_params': [{'stcd': 1, 'stnm': '东平湖', 'Control_Par': 1.0, 'Instruction': '0表示不分洪，1表示分洪'}, {'stcd': 2, 'stnm': '北金堤', 'Control_Par': 1",
+      "response_data": {
+        "success": false,
+        "error": "未找到匹配的参数：站点=不存在的站点，关键词=水位",
+        "available_params": [
+          {
+            "stcd": 1,
+            "stnm": "东平湖",
+            "Control_Par": 1.0,
+            "Instruction": "0表示不分洪，1表示分洪"
+          },
+          {
+            "stcd": 2,
+            "stnm": "北金堤",
+            "Control_Par": 1.0,
+            "Instruction": "0表示不分洪，1表示分洪"
+          },
+          {
+            "stcd": 3,
+            "stnm": "三门峡",
+            "Control_Par": 295.0,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 4,
+            "stnm": "小浪底",
+            "Control_Par": 250.86000061035156,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 5,
+            "stnm": "陆浑",
+            "Control_Par": 316.2099914550781,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 6,
+            "stnm": "故县",
+            "Control_Par": 524.1900024414062,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 7,
+            "stnm": "河口村",
+            "Control_Par": 234.33999633789062,
+            "Instruction": "初始水位"
+          },
+          {
+            "stcd": 8,
+            "stnm": "三门峡",
+            "Control_Par": 0.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 9,
+            "stnm": "小浪底",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 10,
+            "stnm": "陆浑",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 11,
+            "stnm": "故县",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 12,
+            "stnm": "河口村",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 13,
+            "stnm": "三门峡",
+            "Control_Par": 335.0,
+            "Instruction": "防洪高水位"
+          },
+          {
+            "stcd": 14,
+            "stnm": "小浪底",
+            "Control_Par": 275.0,
+            "Instruction": "防洪高水位"
+          },
+          {
+            "stcd": 15,
+            "stnm": "陆浑",
+            "Control_Par": 323.0,
+            "Instruction": "蓄洪限制水位"
+          },
+          {
+            "stcd": 16,
+            "stnm": "故县",
+            "Control_Par": 546.8400268554688,
+            "Instruction": "蓄洪限制水位"
+          },
+          {
+            "stcd": 17,
+            "stnm": "河口村",
+            "Control_Par": 285.42999267578125,
+            "Instruction": "蓄洪限制水位"
+          },
+          {
+            "stcd": 18,
+            "stnm": "三门峡",
+            "Control_Par": 1.0,
+            "Instruction": "0表示完全自由敞泄关闭，1表示打开"
+          },
+          {
+            "stcd": 19,
+            "stnm": "小浪底",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 20,
+            "stnm": "陆浑",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 21,
+            "stnm": "故县",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 22,
+            "stnm": "河口村",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 23,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "预泄控制花园口流量"
+          },
+          {
+            "stcd": 24,
+            "stnm": "陆浑",
+            "Control_Par": 300.0,
+            "Instruction": "预泄流量"
+          },
+          {
+            "stcd": 25,
+            "stnm": "故县",
+            "Control_Par": 300.0,
+            "Instruction": "预泄流量"
+          },
+          {
+            "stcd": 26,
+            "stnm": "河口村",
+            "Control_Par": 100.0,
+            "Instruction": "预泄流量"
+          },
+          {
+            "stcd": 27,
+            "stnm": "河口村",
+            "Control_Par": 275.0,
+            "Instruction": "花园口12000关门的最高水位"
+          },
+          {
+            "stcd": 28,
+            "stnm": "三门峡",
+            "Control_Par": 26.0,
+            "Instruction": "下大洪水，三门峡给小浪底帮忙要求的小浪底蓄洪量"
+          },
+          {
+            "stcd": 29,
+            "stnm": "小浪底",
+            "Control_Par": 254.0,
+            "Instruction": "4500转控10000的判别水位"
+          },
+          {
+            "stcd": 30,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "保滩流量"
+          },
+          {
+            "stcd": 31,
+            "stnm": "小浪底",
+            "Control_Par": 300.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 32,
+            "stnm": "陆浑",
+            "Control_Par": 1000.0,
+            "Instruction": "20年一遇以下洪水控制流量"
+          },
+          {
+            "stcd": 33,
+            "stnm": "陆浑",
+            "Control_Par": 0.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 34,
+            "stnm": "故县",
+            "Control_Par": 1000.0,
+            "Instruction": "20年一遇以下洪水控制流量"
+          },
+          {
+            "stcd": 35,
+            "stnm": "故县",
+            "Control_Par": 0.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 36,
+            "stnm": "河口村",
+            "Control_Par": 2000.0,
+            "Instruction": "254.5m以下控制武陟流量"
+          },
+          {
+            "stcd": 37,
+            "stnm": "河口村",
+            "Control_Par": 0.0,
+            "Instruction": "发电流量"
+          },
+          {
+            "stcd": 38,
+            "stnm": "花园口",
+            "Control_Par": 4500.0,
+            "Instruction": "判别库群退水时刻设置的花园口流量阈值"
+          },
+          {
+            "stcd": 39,
+            "stnm": "花园口",
+            "Control_Par": 4500.0,
+            "Instruction": "下大洪水，退水过程控制的花园口流量"
+          },
+          {
+            "stcd": 40,
+            "stnm": "小浪底",
+            "Control_Par": 200.0,
+            "Instruction": "上大洪水，小浪底开门敞泄的滞蓄洪量阈值"
+          },
+          {
+            "stcd": 41,
+            "stnm": "陆浑",
+            "Control_Par": 321.5,
+            "Instruction": "保本流域20年一遇的水位"
+          },
+          {
+            "stcd": 42,
+            "stnm": "故县",
+            "Control_Par": 542.0399780273438,
+            "Instruction": "保本流域21年一遇的水位"
+          },
+          {
+            "stcd": 43,
+            "stnm": "花园口",
+            "Control_Par": 12000.0,
+            "Instruction": "判别支流水库关门时刻的花园口流量"
+          },
+          {
+            "stcd": 44,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "小浪底保滩库容用完后，转控花园口的流量"
+          },
+          {
+            "stcd": 45,
+            "stnm": "花园口",
+            "Control_Par": 200.0,
+            "Instruction": "上大洪水，小浪底敞泄结束，花园口流量达到的超万洪量（此时东平湖认为已装满）"
+          },
+          {
+            "stcd": 46,
+            "stnm": "洪水类型",
+            "Control_Par": 1.0,
+            "Instruction": "0为上大洪水，1为下大洪水"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "Q12",
+      "description": "用模糊关键词修改",
+      "tool": "modify_dispatch_param",
+      "expected": "返回多条匹配项",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.717559",
+      "end_time": "2026-06-23T21:24:18.824129",
+      "duration_ms": 106.57,
+      "request": {
+        "action": "update",
+        "station_name": "小浪底",
+        "param_desc": "泄",
+        "new_value": 0
+      },
+      "response": "{'success': False, 'error': '匹配到 4 条记录，请使用更精确的关键词', 'matches': [{'stcd': 9, 'stnm': '小浪底', 'Control_Par': 1.0, 'Instruction': '0表示敞泄，1表示控泄'}, {'stcd': 19, 'stnm': '小浪底', 'Control_Par': 1.0, 'Instructi",
+      "response_data": {
+        "success": false,
+        "error": "匹配到 4 条记录，请使用更精确的关键词",
+        "matches": [
+          {
+            "stcd": 9,
+            "stnm": "小浪底",
+            "Control_Par": 1.0,
+            "Instruction": "0表示敞泄，1表示控泄"
+          },
+          {
+            "stcd": 19,
+            "stnm": "小浪底",
+            "Control_Par": 1.0,
+            "Instruction": "0表示预泄关闭，1表示打开"
+          },
+          {
+            "stcd": 23,
+            "stnm": "小浪底",
+            "Control_Par": 4500.0,
+            "Instruction": "预泄控制花园口流量"
+          },
+          {
+            "stcd": 40,
+            "stnm": "小浪底",
+            "Control_Par": 200.0,
+            "Instruction": "上大洪水，小浪底开门敞泄的滞蓄洪量阈值"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "Q13",
+      "description": "参数验证 - 缺少 new_value",
+      "tool": "modify_dispatch_param",
+      "expected": "返回参数验证错误",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.824129",
+      "end_time": "2026-06-23T21:24:18.934244",
+      "duration_ms": 110.12,
+      "request": {
+        "action": "update",
+        "station_name": "小浪底",
+        "param_desc": "控泄",
+        "new_value": null
+      },
+      "response": "{'success': False, 'error': 'update 操作需要提供 station_name、param_desc 和 new_value 参数'}",
+      "response_data": {
+        "success": false,
+        "error": "update 操作需要提供 station_name、param_desc 和 new_value 参数"
+      },
+      "error": null
+    },
+    {
+      "id": "Q17",
+      "description": "生成调度方案单",
+      "tool": "generate_dispatch_sheet",
+      "expected": "执行完整流程并生成输出文件",
+      "status": "success",
+      "start_time": "2026-06-23T21:24:18.934244",
+      "end_time": "2026-06-23T21:24:25.312889",
+      "duration_ms": 6378.64,
+      "request": {},
+      "response": "{'success': True, 'message': '调度方案单生成完成', 'steps': {'import': {'Q_Inputsd_rows': 1780, 'Q_Inputxd_rows': 8346, 'elapsed_seconds': 2.29}, 'calculation': {'elapsed_seconds': 3.51, 'exit_code': 0}, 'expo",
+      "response_data": {
+        "success": true,
+        "message": "调度方案单生成完成",
+        "steps": {
+          "import": {
+            "Q_Inputsd_rows": 1780,
+            "Q_Inputxd_rows": 8346,
+            "elapsed_seconds": 2.29
+          },
+          "calculation": {
+            "elapsed_seconds": 3.51,
+            "exit_code": 0
+          },
+          "export": {
+            "output_rows": 9630,
+            "output_file": "output/Q_Output_20260623_212424.xlsx",
+            "elapsed_seconds": 0.58
+          }
+        },
+        "total_elapsed_seconds": 6.38,
+        "output_file": "output/Q_Output_20260623_212424.xlsx"
+      },
+      "error": null
+    }
+  ]
+}
