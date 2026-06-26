@@ -830,7 +830,7 @@ def register_forecast_models(mcp: FastMCP):
         降雨图斑相似性分析模型（统一入口）。
 
         整体流程分三步：
-        - step="1"：查询各流域最新降雨情况，返回各流域+降雨事件列表，供用户选择。
+        - step="1"：查询各流域降雨情况（支持时间范围过滤），返回各流域+降雨事件列表，供用户选择。
         - step="2"：根据用户选择的流域和降雨编号，依次链式执行
                     ①查询降雨详情 ②计算相似雨 ③查询相似雨图斑图片 ④图斑相似度计算
                     （顺序固定，不可调整），返回最相似的3场降雨时间段。
@@ -841,12 +841,12 @@ def register_forecast_models(mcp: FastMCP):
             step: 流程阶段，可选值: "1"、"2" 或 "3"
             basin: 流域名称（如：黄河、伊洛河、洛河），在 step="2" 和 step="3" 时必填
             rainfall_id: 降雨编号（由 step="1" 返回），仅在 step="2" 时必填
-            start_time: 查询起始时间，仅在 step="3" 时必填
-            end_time: 查询结束时间，仅在 step="3" 时必填
+            start_time: 查询起始时间，step="1" 时可选（用于时间范围过滤），step="3" 时必填
+            end_time: 查询结束时间，step="1" 时可选（用于时间范围过滤），step="3" 时必填
             raster_image_url: 对应时段的图斑图片URL，仅在 step="3" 时必填
 
         Returns:
-            step="1" 返回各流域最新降雨列表；
+            step="1" 返回各流域降雨列表；
             step="2" 返回链式执行结果，包含降雨详情、相似雨列表、图斑图片、最相似图斑；
             step="3" 返回水文信息与图斑图片URL整合结果。
         """
@@ -863,14 +863,22 @@ def register_forecast_models(mcp: FastMCP):
             }
 
         # -------------------------------------------------------------------
-        # 第一步：查询各流域最新降雨情况
+        # 第一步：查询各流域降雨情况（支持时间范围过滤）
         # -------------------------------------------------------------------
         if step == "1":
             try:
-                # 调用"查询各流域最新降雨情况"接口
-                url = "http://36.99.160.89:8066/rain/getLatestRainList"
+                # 判断是否指定了时间范围
+                has_time_range = start_time and end_time
                 
-                logger.info(f"调用查询最新降雨接口: {url}")
+                if has_time_range:
+                    # 调用"按时间范围查询降雨"接口
+                    url = f"http://36.99.160.89:8066/rain/getRainListByTimeRange?startTime={start_time}&endTime={end_time}"
+                    logger.info(f"调用按时间范围查询降雨接口: {url}")
+                else:
+                    # 调用"查询各流域最新降雨情况"接口
+                    url = "http://36.99.160.89:8066/rain/getLatestRainList"
+                    logger.info(f"调用查询最新降雨接口: {url}")
+                
                 response = requests.get(url, timeout=30)
                 response.raise_for_status()
                 
