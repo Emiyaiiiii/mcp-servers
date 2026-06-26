@@ -39,7 +39,9 @@ dist/
 Thumbs.db
 
 data/.auth_token.json
-data/
+data/.enhanced_search_token.json
+data/.water_forecast_token.json
+data/.xinanjiang_token.json
 storage/
 
 *.db

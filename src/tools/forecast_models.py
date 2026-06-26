@@ -7,15 +7,14 @@ import pyodbc
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from collections import defaultdict
+from typing import List, Dict, Any, Optional, Tuple
 from fastmcp import FastMCP
 from src.utils.logger import get_logger
-from src.services.storage.scheme_storage import save_scheme, generate_unique_id
+from src.services.storage.scheme_storage import save_scheme
 from src.services.external_api.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service
-from src.services.external_api.auth_service import auth_service
 from src.services.external_api.water_forecast_service import water_forecast_service
 from src.utils.station_codes import get_reservoir_code, get_hydrology_code
-from src.config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -38,7 +37,7 @@ def register_forecast_models(mcp: FastMCP):
             rainfall = json.loads(rainfall_data) if isinstance(rainfall_data, str) else rainfall_data
         except json.JSONDecodeError:
             return_value = {"success": False, "error": "降雨数据格式错误，请提供有效的JSON格式"}
-            logger.debug(f"run_hydrological_model 返回结果: {return_value}")
+            logger.debug(f"run_rainfall_forecast_model 返回结果: {return_value}")
             return return_value
 
         total_rainfall = sum(float(r.get("rainfall", 0)) for r in rainfall) if rainfall else 0
@@ -65,7 +64,7 @@ def register_forecast_models(mcp: FastMCP):
             "forecast_points": forecast_points,
             "message": f"水文预报模型执行成功，{basin}流域共产生{total_rainfall:.1f}mm降雨"
         }
-        logger.debug(f"run_hydrological_model 返回结果: {return_value}")
+        logger.debug(f"run_rainfall_forecast_model 返回结果: {return_value}")
         return return_value
 
     @mcp.tool()
@@ -109,8 +108,6 @@ def register_forecast_models(mcp: FastMCP):
                     scheme_list = data_field.get("recommended", [])
             elif isinstance(data_field, list):
                 scheme_list = data_field
-            elif isinstance(scheme_list_result, list):
-                scheme_list = scheme_list_result
             else:
                 scheme_list = []
             
@@ -198,7 +195,7 @@ def register_forecast_models(mcp: FastMCP):
 
     @mcp.tool()
     async def generate_dispatch_scheme(
-        start_time: str = None
+        _start_time: str = None
     ) -> dict:
         """
         一键生成调度方案单：导入Excel → 运行RegualDispacth.exe计算 → 统计处理 → 存储入库 → 返回前台展示数据。
@@ -208,9 +205,9 @@ def register_forecast_models(mcp: FastMCP):
         读取 Q_Output 和 Z_Output 计算结果进行统计处理后存储到数据库，并返回摘要数据供前台展示。
 
         Args:
-            start_time: 调度开始时间（格式：YYYY-MM-DD），当前基于Excel数据自动确定时间范围
+            _start_time: 调度开始时间（格式：YYYY-MM-DD），当前基于Excel数据自动确定时间范围
         """
-        logger.info(f"调用 generate_dispatch_scheme，收到参数: start_time={repr(start_time)}")
+        logger.info(f"调用 generate_dispatch_scheme，收到参数: _start_time={repr(_start_time)}")
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
@@ -219,6 +216,7 @@ def register_forecast_models(mcp: FastMCP):
 
         total_start = time.time()
         steps = {}
+        conn = None
 
         try:
             # ================================================================
@@ -298,7 +296,8 @@ def register_forecast_models(mcp: FastMCP):
             logger.info(f"计算完成: exit_code={result.returncode}, 耗时{calc_elapsed}秒")
 
             if result.returncode != 0:
-                logger.warning(f"RegualDispacth.exe 返回非零退出码: {result.returncode}, stderr: {result.stderr}")
+                conn.close()
+                return {"success": False, "error": f"RegualDispacth.exe 返回非零退出码: {result.returncode}, stderr: {result.stderr}", "steps": steps}
 
             # ================================================================
             # 步骤3: 读取Q_Output并进行统计处理
@@ -321,7 +320,6 @@ def register_forecast_models(mcp: FastMCP):
             output_rows = len(output_data)
 
             # 按站点分组统计
-            from collections import defaultdict
             station_groups = defaultdict(list)
             for item in output_data:
                 station_groups[item["stnm"]].append(item["q"])
@@ -430,6 +428,12 @@ def register_forecast_models(mcp: FastMCP):
         except Exception as e:
             logger.error(f"generate_dispatch_scheme 出错: {e}")
             return {"success": False, "error": f"调度方案单生成失败: {str(e)}", "steps": steps}
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     @mcp.tool()
     async def run_xinanjiang_model(
@@ -525,7 +529,6 @@ def register_forecast_models(mcp: FastMCP):
                 return {"code": 200, "data": {}, "station_count": 0}
             
             # 按时间戳分组
-            from collections import defaultdict
             time_groups = defaultdict(list)
             station_weights = {}
             
@@ -1071,12 +1074,12 @@ def register_forecast_models(mcp: FastMCP):
                 # 从相似雨列表中提取每场雨的时段
                 if isinstance(similar_rainfall_list, list):
                     for item in similar_rainfall_list:
-                        start_time = item.get("rainfallDate", "")
-                        end_time = item.get("endRainfallDate", "")
+                        s_time = item.get("rainfallDate", "")
+                        e_time = item.get("endRainfallDate", "")
                         request_data["similarPeriods"].append({
                             "period": {
-                                "ftm": start_time.split(" ")[0] if start_time else "",
-                                "ttm": end_time.split(" ")[0] if end_time else ""
+                                "ftm": s_time.split(" ")[0] if s_time else "",
+                                "ttm": e_time.split(" ")[0] if e_time else ""
                             },
                             "eigenPeriods": []
                         })
@@ -1277,7 +1280,7 @@ def register_forecast_models(mcp: FastMCP):
                 }
 
     @mcp.tool()
-    async def modify_dispatch_param(action: str, station_name: str | None = None, param_desc: str | None = None, new_value: float | None = None) -> dict:
+    async def modify_dispatch_param(action: str, station_name: Optional[str] = None, param_desc: Optional[str] = None, new_value: Optional[float] = None) -> dict:
         """
         查看或修改 data.mdb 中 Dispatch_Par 表的调度参数。
 
@@ -1292,6 +1295,7 @@ def register_forecast_models(mcp: FastMCP):
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
         conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+        conn = None
 
         try:
             conn = pyodbc.connect(conn_str)
@@ -1409,6 +1413,12 @@ def register_forecast_models(mcp: FastMCP):
         except Exception as e:
             logger.error(f"modify_dispatch_param 出错: {e}")
             return {"success": False, "error": f"参数修改失败: {str(e)}"}
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     @mcp.tool()
     async def set_flow_constraint(station_name: str, max_flow: float) -> dict:
@@ -1448,6 +1458,7 @@ def register_forecast_models(mcp: FastMCP):
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
         conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+        conn = None
 
         try:
             conn = pyodbc.connect(conn_str)
@@ -1468,8 +1479,8 @@ def register_forecast_models(mcp: FastMCP):
                     logger.warning(f"未找到 stcd={stcd} 的参数")
                     continue
 
-                old_val = row.Control_Par
-                if old_val == new_val:
+                old_val = float(row.Control_Par) if row.Control_Par is not None else None
+                if old_val is not None and abs(old_val - new_val) < 0.01:
                     continue
 
                 cursor.execute(
@@ -1515,6 +1526,12 @@ def register_forecast_models(mcp: FastMCP):
         except Exception as e:
             logger.error(f"set_flow_constraint 出错: {e}")
             return {"success": False, "error": f"设置流量约束失败: {str(e)}"}
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     @mcp.tool()
     async def generate_dispatch_sheet() -> dict:
@@ -1531,7 +1548,7 @@ def register_forecast_models(mcp: FastMCP):
     # ================================================================
 
     # ─── _calculate_reservoir_stats 辅助函数 ────────────────────────
-    def _calculate_reservoir_stats(conn) -> tuple[list, list]:
+    def _calculate_reservoir_stats(conn) -> Tuple[List, List]:
         """从 Z_Output 表中提取各水库的关键统计指标（exe 运行后生成）
 
         Z_Output 表结构: stcd, stnm, tm, Qin(入库), Qout(出库), z(水位), v(蓄量)
@@ -1555,7 +1572,7 @@ def register_forecast_models(mcp: FastMCP):
 
             for rname in RESERVOIR_NAMES:
                 # 筛选该水库的数据
-                reservoir_rows = [r for r in rows if r.stnm.strip() == rname]
+                reservoir_rows = [r for r in rows if (r.stnm.strip() if r.stnm else '') == rname]
                 if not reservoir_rows:
                     continue
 
@@ -1810,6 +1827,7 @@ def register_forecast_models(mcp: FastMCP):
             更新的参数数量、修改前后对比、scheme_id（若生成方案）
         """
         logger.info(f"调用 apply_parameter_template, template_name={template_name}, generate_scheme={generate_scheme}")
+        conn = None
 
         try:
             # 1. 查找模板
@@ -1861,7 +1879,7 @@ def register_forecast_models(mcp: FastMCP):
                             "stcd": stcd,
                             "stnm": str(row.get('stnm', '')).strip(),
                             "old_value": old_value,
-                            "new_value": new_value.get('Control_Par', 0) if isinstance(new_value, dict) else new_value,
+                            "new_value": new_value,
                             "instruction": str(row.get('Instruction', '')).strip()[:50]
                         })
 
@@ -1899,6 +1917,12 @@ def register_forecast_models(mcp: FastMCP):
         except Exception as e:
             logger.error(f"apply_parameter_template 出错: {e}")
             return {"success": False, "error": f"应用参数模板失败: {str(e)}"}
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     # ─── Task 5: verify_dispatch_result ──────────────────────────────
     @mcp.tool()
@@ -1916,6 +1940,7 @@ def register_forecast_models(mcp: FastMCP):
             验证报告：通过/需关注/失败状态，各站点误差统计
         """
         logger.info(f"调用 verify_dispatch_result, template_name={template_name}")
+        conn = None
 
         try:
             # 1. 查找模板
@@ -1984,8 +2009,8 @@ def register_forecast_models(mcp: FastMCP):
                         time_col = col
                     elif col in ['出库', 'q', 'flow']:
                         flow_cols.append(col)
-                    else:
-                        # 其他列可能是站点名（流量列）
+                    elif any('\u4e00' <= ch <= '\u9fff' for ch in str(col)):
+                        # 包含中文字符的列名可能是站点名（流量列）
                         flow_cols.append(col)
 
                 if time_col is None:
@@ -2034,6 +2059,8 @@ def register_forecast_models(mcp: FastMCP):
                     }
                     total_matched += matched
                     total_errors.extend(errors)
+                else:
+                    logger.warning(f"sheet '{sheet_name}' 未匹配到任何数据点，可能是站点名或时间格式不一致")
 
             # 5. 判定验证结果
             if not station_results:
@@ -2070,3 +2097,9 @@ def register_forecast_models(mcp: FastMCP):
         except Exception as e:
             logger.error(f"verify_dispatch_result 出错: {e}")
             return {"success": False, "error": f"验证调度结果失败: {str(e)}"}
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
