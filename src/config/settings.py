@@ -19,8 +19,8 @@ class Settings:
 
     KNOWLEDGE_BASE_API_URL = os.getenv('KNOWLEDGE_BASE_API_URL', 'http://10.4.158.35:9621/query/data')
 
-    DISPATCH_API_BC_URL = os.getenv('DISPATCH_API_BC_URL', 'http://192.168.153.130:22811/bc')
-    DISPATCH_API_SW_URL = os.getenv('DISPATCH_API_SW_URL', 'http://192.168.153.130:22811/sw')
+    DISPATCH_API_BC_URL = os.getenv('DISPATCH_API_BC_URL', 'http://localhost:22811/bc')
+    DISPATCH_API_SW_URL = os.getenv('DISPATCH_API_SW_URL', 'http://localhost:22811/sw')
 
     XINANJIANG_API_BASE_URL = os.getenv('XINANJIANG_API_BASE_URL', 'http://gateway.yrihr.com')
 
