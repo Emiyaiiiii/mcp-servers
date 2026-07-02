@@ -13,6 +13,7 @@ from src.tools.forecast_models import register_forecast_models
 from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
 from src.services.communication.websocket_manager import websocket_handler
+from src.services.communication.session_middleware import SessionIDMiddleware
 
 
 def get_frontend_path():
@@ -47,6 +48,36 @@ def create_app() -> FastMCP:
     register_forecast_models(mcp)
     register_reservoir_dispatch(mcp)
     register_ui_tools(mcp)
+
+    # 注册 SessionIDMiddleware — 从工具调用参数中提取 session_id
+    # 并存入 ContextVar，使 CommandSender 能够将指令路由到正确的
+    # 前端 WebSocket 连接，而非广播给所有连接。
+    mcp.add_middleware(SessionIDMiddleware())
+
+    # 为所有已注册的工具添加 session_id 到参数 schema 中。
+    # session_id 由 deerflow 侧的 SessionInjectMiddleware 自动注入，
+    # 对工具函数透明（由 SessionIDMiddleware 提取并移除）。
+    try:
+        import asyncio
+
+        async def _enrich_tool_schemas():
+            tools = await mcp.list_tools()
+            for tool in tools:
+                if tool.parameters is not None:
+                    props = tool.parameters.setdefault("properties", {})
+                    if "session_id" not in props:
+                        props["session_id"] = {
+                            "type": "string",
+                            "description": "Browser WebSocket session_id (auto-populated)",
+                        }
+
+        asyncio.run(_enrich_tool_schemas())
+    except Exception:
+        from src.utils.logger import get_logger
+
+        get_logger(__name__).warning(
+            "Failed to enrich tool schemas with session_id", exc_info=True
+        )
 
     return mcp
 

@@ -17,6 +17,7 @@
 from typing import Dict, Any, Optional, List
 from src.services.communication.websocket_manager import websocket_manager
 from src.services.communication.message_queue import message_queue
+from src.services.communication.session_context import get_current_session_id
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,12 +46,16 @@ class CommandSender:
             function: 指令函数名，如 "FUNC_CAMERA_FLYTO"
             data: 指令数据
             target: 目标类型，"page" 或 "scene"
-            session_id: 目标 session_id，如果为 None 则广播到所有连接
+            session_id: 目标 session_id，如果为 None 则尝试从当前工具调用
+                        上下文获取，如果仍然为 None 则广播到所有连接
             wait_response: 是否等待响应
 
         Returns:
             统一格式的响应
         """
+        # 如果未指定 session_id，尝试从当前工具调用上下文获取
+        if session_id is None:
+            session_id = get_current_session_id()
         # 检查是否有活跃的 WebSocket 连接
         if not websocket_manager.has_connections():
             logger.warning("没有活跃的 WebSocket 连接！请先连接前端/UE 到 ws://localhost:8082/browser")
