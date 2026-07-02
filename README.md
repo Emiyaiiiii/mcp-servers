@@ -1,62 +1,78 @@
 # 防洪四预 MCP 服务
 
-基于 FastMCP 的防洪四预（预报、预警、预演、预案）智能服务。
+基于 FastMCP 的防洪四预（预报、预警、预演、预案）智能服务，集成水库联合调度、参数模板管理、流量约束控制等功能。
 
 ## 项目结构
 
 ```
 mcp-servers/
 ├── src/
-│   ├── server.py           # 服务入口
+│   ├── server.py                   # 服务入口（HTTP 模式，端口 8082）
 │   ├── config/
-│   │   ├── config.yaml     # 水库配置
-│   │   └── settings.py     # 环境变量配置
+│   │   ├── config.yaml             # 水库静态配置
+│   │   ├── config.py               # 配置加载器
+│   │   └── settings.py             # 环境变量配置
 │   ├── services/
-│   │   ├── communication/        # 通信服务
-│   │   │   ├── command_sender.py    # 统一消息发送服务
-│   │   │   ├── message_queue.py     # 消息队列
-│   │   │   └── websocket_manager.py # WebSocket连接管理
-│   │   ├── external_api/         # 外部 API 服务
-│   │   │   ├── auth_service.py          # 数据 API 认证
-│   │   │   ├── water_forecast_service.py # 来水预报 API
-│   │   │   ├── enhanced_search_service.py # 增强搜索 API
-│   │   │   └── xinanjiang_service.py    # 新安江模型 API
-│   │   └── storage/              # 存储服务
-│   │       ├── scheme_storage.py    # 调度方案存储
-│   │       └── database/            # 数据库服务
-│   │           ├── connection.py   # 数据库连接管理
-│   │           ├── data_access.py  # 数据访问层
-│   │           ├── init_database.py # 数据库初始化
-│   │           └── config_loader.py # 动态配置加载器
+│   │   ├── communication/          # 通信服务
+│   │   │   ├── command_sender.py
+│   │   │   ├── message_queue.py
+│   │   │   └── websocket_manager.py
+│   │   ├── external_api/           # 外部 API 服务
+│   │   │   ├── auth_service.py
+│   │   │   ├── water_forecast_service.py
+│   │   │   ├── enhanced_search_service.py
+│   │   │   └── xinanjiang_service.py
+│   │   └── storage/                # 存储服务
+│   │       ├── scheme_storage.py
+│   │       └── database/
 │   ├── tools/
-│   │   ├── ui_tools.py         # UI页面跳转工具
-│   │   ├── data_api_tools.py   # 数据API工具
-│   │   ├── warning_tools.py    # 预警工具
-│   │   ├── simulation_tools.py # 预演工具
-│   │   ├── plan_tools.py       # 预案工具
-│   │   └── forecast_models.py  # 预报模型工具
+│   │   ├── forecast_models.py      # 预报模型工具（核心，11 个工具）
+│   │   ├── warning_tools.py        # 预警工具
+│   │   ├── simulation_tools.py     # 预演工具
+│   │   ├── plan_tools.py           # 预案工具
+│   │   ├── data_api_tools.py       # 数据 API 工具
+│   │   ├── reservoir_dispatch.py   # 水库调度工具
+│   │   └── ui_tools.py             # UI 工具
 │   └── utils/
-│       ├── exceptions.py
-│       ├── logger.py
-│       ├── retry.py
-│       └── station_codes.py
-├── sql/                    # 数据库初始化脚本
-│   ├── 01_create_tables.sql
-│   ├── 02_seed_reservoirs.sql
-│   ├── 03_seed_water_levels.sql
-│   ├── 04_seed_simulation_params.sql
-│   ├── 05_seed_flood_plan.sql
-│   └── 06_seed_dispatch_schemes.sql
-├── storage/                # SQLite数据库文件
-├── data/                   # 原始数据文件（CSV/JSON）
-├── templates/              # 预案模板
-├── docker-compose.yml
-├── Dockerfile
+│       ├── logger.py               # 日志工具
+│       ├── response_helper.py      # 响应辅助
+│       └── station_codes.py        # 站点编码映射
+├── 6/
+│   └── data.mdb                    # Access 数据库（调度参数、计算结果）
+├── Parameter_template/             # 参数模板文件（只读，不可修改）
+│   ├── 上大洪水控制/
+│   │   ├── 方案一：（小浪底不保滩，控花园口10000）.xlsx
+│   │   ├── 方案二：（小浪底254以下保滩，254以上控花园口10000）.xlsx
+│   │   └── 方案三：（小浪底全程4500保滩）.xlsx
+│   └── 下大洪水控制/
+│       ├── 方案一：演练洪水-常规调度....xlsx
+│       └── 方案二：演练洪水-优化调度....xlsx
+├── data/                           # Excel 入库流量数据
+│   ├── Q_Inputsd.xlsx              # 上游入库流量
+│   └── Q_Inputxd.xlsx              # 下游入库流量
+├── RegualDispacth.exe              # 调度计算程序
+├── skills/                         # Skill 文件（供智能体框架使用）
+│   └── custom/
+│       ├── flood-control-mcp/SKILL.md    # 防洪 MCP 使用指南
+│       └── schedule-dispatch/SKILL.md    # 调度方案生成指南
+├── test/                           # 测试文件
+│   ├── mcp_full_system_test.py     # 全功能系统测试
+│   ├── test_new_flow_feature.py    # 流量约束 + 水库统计测试
+│   └── test_parameter_templates.py # 参数模板测试
+├── sql/                            # SQLite 初始化脚本
+├── frontend/                       # 前端页面
 ├── pyproject.toml
+├── mcp-config.json                 # MCP 客户端配置
 └── uv.lock
 ```
 
 ## 快速启动
+
+### 环境要求
+
+- Python >= 3.12
+- uv 包管理器
+- Windows 系统（依赖 Access 数据库驱动和 RegualDispacth.exe）
 
 ### 本地开发
 
@@ -64,220 +80,197 @@ mcp-servers/
 # 安装依赖
 uv sync
 
-# 配置环境变量（可选）
+# 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件，配置必要的参数
+# 编辑 .env 文件，配置 API 密钥等参数
 
-# 初始化数据库（首次运行）
-make db-init
+# 启动 MCP 服务（HTTP 模式，端口 8082）
+uv run python -c "from src.server import run_server; run_server()"
 
-# 启动MCP服务（stdio 模式，用于 Claude Desktop 等客户端）
-make start
-# 或
+# 或直接执行
 uv run mcp-server
-
-# 启动MCP服务（HTTP 模式，用于 Web 应用）
-make start-http
-# 或
-uv run python -c "from src.server import run_server; run_server(transport='streamable-http')"
-
-# 测试数据库连接
-make db-test
-
-# 测试mcp服务
-npx @modelcontextprotocol/inspector
 ```
 
-### Docker部署
+启动后服务地址：
+- MCP 端点: `http://localhost:8082/mcp`
+- WebSocket 端点: `ws://localhost:8082/browser`
+- 前端页面: `http://localhost:8082/index.html`
+
+### Docker 部署
 
 ```bash
-# 构建并启动服务
 docker-compose up --build
-
-# 后台运行
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
+docker-compose up -d     # 后台运行
+docker-compose logs -f   # 查看日志
 ```
 
-## 数据库说明
+## 核心功能
 
-### SQLite数据库
+### 1. 调度方案单生成 (`generate_dispatch_scheme`)
 
-系统使用SQLite作为数据存储，数据库文件位于 `storage/flood_control.db`。
+一键生成五库联调调度方案，完整流程：
 
-### 数据迁移
+1. **导入 Excel** — 从 `data/Q_Inputsd.xlsx` 和 `data/Q_Inputxd.xlsx` 读取入库流量
+2. **运行计算** — 调用 `RegualDispacth.exe` 进行调度计算
+3. **统计处理** — 读取 `Q_Output` 和 `Z_Output` 计算结果，提取水库统计指标
+4. **存储入库** — 保存到 SQLite 数据库，返回前台展示数据
 
-所有数据已从 `data/` 目录迁移到数据库：
+返回数据包含：
+- 各站点流量统计（最大/最小/平均流量）
+- 水库特征值（最大入库、最大出库、滞蓄洪量、最高水位、相应蓄量）
 
-| 数据源 | 目标表 | 记录数 |
-|--------|--------|--------|
-| 水库.csv | reservoirs | 27条 |
-| 水文站.csv | hydrology_stations | 288条 |
-| 雨量站.csv | rainfall_stations | 3598条 |
-| Flood_Control_Plan.json | flood_control_* | 207条 |
-| dispatch_scheme_data_base.json | dispatch_timeseries | 1632条 |
+### 2. 参数模板管理
 
-### 数据库管理命令
+支持从 `Parameter_template/` 目录读取预定义参数模板（只读），可应用到 Access 数据库（`6/data.mdb` 的 `Dispatch_Par` 表）。
 
-```bash
-# 初始化数据库（重建并导入所有seed数据）
-make db-init
+| 工具 | 说明 |
+|------|------|
+| `list_parameter_templates` | 列出所有可用模板（类别、参数条数、计算结果 sheet） |
+| `show_parameter_template` | 查看模板完整参数（stcd/stnm/Control_Par/Instruction） |
+| `apply_parameter_template` | 将模板参数写入 Dispatch_Par 表，可选自动生成调度方案 |
+| `verify_dispatch_result` | 将实际计算结果与模板预期结果对比验证 |
 
-# 测试数据库连接和数据完整性
-make db-test
+模板匹配规则：
+- 精确匹配唯一键（如 `上大洪水控制/方案一`）
+- 模糊匹配关键词（如 `常规调度`、`上大`）
 
-# 查看数据库内容
-make db-shell
+### 3. 流量约束控制 (`set_flow_constraint`)
 
-# 清理数据库（删除数据库文件）
-make db-clean
-```
+控制指定站点流量不超过设定值，自动调整 `Dispatch_Par` 表中 6 个相关参数：
+
+- **target 类型**：直接设为目标流量（如花园口控制流量）
+- **buffer 类型**：设为目标流量 - 1000（如小浪底保滩流量）
+
+当前支持站点：花园口
+
+### 4. 数据库参数修改 (`modify_dispatch_param`)
+
+支持查看和修改 `data.mdb` 中 `Dispatch_Par` 表的调度参数：
+
+- `action="list"` — 查看所有 46 条参数
+- `action="update"` — 按站点名和关键词匹配修改参数
+
+### 5. 新安江水文模型 (`run_xinanjiang_model`)
+
+运行新安江模型计算目标站点区间来水，支持：
+- 从本地数据库查询降雨数据并计算加权面雨量
+- 支持自定义模型参数
+- 返回逐时段流量、降雨、蒸散发数据
+
+### 6. 其他工具
+
+- `run_rainfall_forecast_model` — 降雨预报模型
+- `run_water_forecast_model` — 来水预报模型（对接设计院 API）
+- `rainfall_similarity_analysis` — 降雨图斑相似性分析（三步流程）
+- `generate_dispatch_sheet` — 调度方案生成辅助入口
+
+## 工具列表
+
+工具总计：**74 个**
+
+| 类别 | 文件 | 数量 | 说明 |
+|------|------|------|------|
+| 预报模型 | forecast_models.py | 11 | 水文预报、新安江模型、调度方案、参数模板、流量约束 |
+| 预警工具 | warning_tools.py | 6 | 水位/流量预警、预警简报 |
+| 预演工具 | simulation_tools.py | 9 | 相机飞行、闸门控制、水位标签 |
+| 预案工具 | plan_tools.py | 4 | 模板管理、知识库、文档导出 |
+| 数据 API | data_api_tools.py | 22 | 雨量/水文/水库数据获取 |
+| UI 工具 | ui_tools.py | 9 | 页面跳转、调度方案、预演指令 |
+| 水库调度 | reservoir_dispatch.py | 13 | 水库调度方案对比、模拟 |
+
+### 预报模型工具 (forecast_models.py) — 11 个
+
+- `run_rainfall_forecast_model` — 执行降雨预报模型
+- `run_water_forecast_model` — 执行来水预报模型
+- `generate_dispatch_scheme` — 一键生成调度方案单
+- `generate_dispatch_sheet` — 调度方案生成（别名入口）
+- `run_xinanjiang_model` — 运行新安江水文模型
+- `rainfall_similarity_analysis` — 降雨图斑相似性分析
+- `modify_dispatch_param` — 查看/修改调度参数
+- `set_flow_constraint` — 设置站点流量约束
+- `list_parameter_templates` — 列出参数模板
+- `show_parameter_template` — 查看模板参数详情
+- `apply_parameter_template` — 应用参数模板
+- `verify_dispatch_result` — 验证调度结果
+
+## 数据库
+
+### Access 数据库 (`6/data.mdb`)
+
+核心数据库，存储调度参数和计算结果：
+
+| 表名 | 说明 |
+|------|------|
+| `Dispatch_Par` | 调度参数（46 条，stcd 1-46） |
+| `Q_Inputsd` | 上游入库流量（Excel 导入） |
+| `Q_Inputxd` | 下游入库流量（Excel 导入） |
+| `Q_Output` | 出库流量计算结果（exe 运行后生成） |
+| `Z_Output` | 水库水位/蓄量计算结果（exe 运行后生成） |
+
+### SQLite 数据库 (`storage/flood_control.db`)
+
+存储系统配置、方案数据、历史记录等。
 
 ## 环境变量
-
-复制 `.env.example` 为 `.env` 并配置：
 
 ```bash
 # MCP 服务配置
 MCP_SERVER_NAME=FloodControlMCP
 
-# 场景 WebSocket 配置（UE服务地址）
-SCENE_WS_BASE_URL=ws://localhost:8889
-SCENE_WS_TIMEOUT=30
-SCENE_IDLE_TIMEOUT=60
-
 # 数据 API 配置
 DATA_API_BASE_URL=http://wt.hxyai.cn/fx
-DATA_API_USERNAME=yhllm
-DATA_API_PASSWORD=Yhllm#2026
-DATA_API_MOCK_ENABLED=true
+DATA_API_ACCESS_KEY=yhllm
+DATA_API_SECRET_KEY=5f75d154f9cc50ad0ad8790d0a7f5301
+
+# 新安江模型 API
+XINANJIANG_API_BASE_URL=http://gateway.yrihr.com
+
+# WebSocket 配置
+SCENE_WS_BASE_URL=ws://localhost:8889
 
 # 日志配置
 LOG_LEVEL=INFO
-
-# 数据库配置
-DATABASE_PATH=storage/flood_control.db
 ```
 
-## 工具列表
+## Skill 文件
 
-工具总计：**52个**
+提供给 DeerFlow 等智能体框架使用：
 
-| 类别 | 文件 | 数量 | 说明 |
-|------|------|------|------|
-| 预报模型 | forecast_models.py | 2 | 水文预报、洪水演进模型 |
-| 预警工具 | warning_tools.py | 6 | 水位/流量预警、预警简报 |
-| 预演工具 | simulation_tools.py | 9 | 相机飞行、闸门控制、水位标签 |
-| 预案工具 | plan_tools.py | 4 | 模板管理、知识库、文档导出 |
-| 数据API | data_api_tools.py | 22 | 雨量/水文/水库数据获取 |
-| UI工具 | ui_tools.py | 9 | 页面跳转、调度方案、预演指令 |
-
-### 预报工具 (forecast_models) - 2个
-- `run_hydrological_model` - 执行水文预报模型
-- `run_flood_routing_model` - 执行洪水演进模型
-- `generate_dispatch_scheme` - 生成五库联调调度方案
-
-### 预警工具 (warning_tools) - 6个
-- `generate_water_level_warning` - 获取水库预警信息
-- `generate_flow_warning` - 获取河道水文站预警信息
-- `get_rainfall_warning` - 获取雨量站预警信息
-- `check_water_level_warning` - 判断预报水位是否超预警
-- `check_flow_warning` - 判断预报流量是否超预警
-- `generate_warning_bulletin` - 生成预警简报
-
-### 预演工具 (simulation_tools) - 9个
-- `fly_to_location` - 相机飞向位置
-- `fly_to_sanmenxia_water_level_view` - 飞向三门峡水位视角
-- `control_floodgate` - 控制闸门
-- `set_reservoir_water_level` - 设置水库水位
-- `create_water_level_placemark` - 创建水位标签
-- `update_water_level_placemark` - 更新水位标签
-- `destroy_placemarks` - 删除标签
-- `query_scene_status` - 查询场景连接状态
-- `get_available_locations` - 获取可用的位置列表
-- `get_reservoir_info` - 获取水库详细信息
-
-### 预案工具 (plan_tools) - 4个
-- `load_plan_template` - 加载预案模板
-- `list_plan_templates` - 列出可用模板
-- `export_document` - 导出预案文档
-- `query_knowledge_base` - 查询防洪知识库
-
-### 数据API工具 (data_api_tools) - 22个
-- `get_rainfall_station_info` - 获取雨量站信息
-- `get_realtime_rainfall` - 获取实时雨量监测数据
-- `get_daily_rainfall_stats` - 获取日降雨量统计
-- `get_rainfall_statistics` - 获取雨量统计结果
-- `get_river_station_info` - 获取水文站信息
-- `list_hydrological_stations` - 获取水文站列表
-- `list_design_flood_results` - 获取设计洪水成果
-- `get_hydrological_features` - 获取水文特征统计
-- `list_water_level_sections` - 获取水位断面列表
-- `list_realtime_hydrology` - 获取实时水情列表
-- `list_daily_hydrology` - 获取日均水情列表
-- `list_reservoirs` - 获取水库列表
-- `get_reservoir_features` - 获取水库特性
-- `list_reservoir_level_capacity` - 获取水位库容曲线
-- `list_reservoir_features` - 获取水库特征值列表
-- `get_reservoir_realtime` - 获取水库实时水情
-- `get_reservoir_daily` - 获取水库日均水情
-- `get_river_latest_realtime` - 获取河道最新实时水情
-- `get_reservoir_latest_realtime` - 获取水库最新实时水情
-- `get_hydrological_extreme` - 获取水文站极值信息
-- `get_hydrological_same_period` - 获取水文站同期数据
-- `get_hydrological_yearly_extreme` - 获取各年份极值数据
-- `get_rainfall_warning` - 获取雨量站预警信息
-- `get_reservoir_warning` - 获取水库预警信息
-- `get_hydrological_warning` - 获取水文站预警信息
-
-### UI工具 (ui_tools) - 9个
-- `navigate_to_reservoir_page` - 跳转到水库实时数据页面
-- `navigate_to_station_page` - 跳转到水文站页面
-- `navigate_to_rainfall_page` - 跳转到降雨信息页面
-- `navigate_to_similar_rainfall_page` - 跳转到相似雨分析页面
-- `navigate_to_reservoir_forecast_page` - 跳转到水库预报页面
-- `navigate_to_control_guidance_page` - 跳转到控导信息页面
-- `navigate_to_station_forecast_page` - 跳转到水文站预报页面
-- `generate_dispatch_scheme` - 生成五库联调调度方案
-- `send_simulation_command` - 发送预演指令
+| Skill | 路径 | 说明 |
+|-------|------|------|
+| FloodControlMCP | `skills/custom/flood-control-mcp/SKILL.md` | 完整 MCP 工具使用指南（74 个工具） |
+| ScheduleDispatch | `skills/custom/schedule-dispatch/SKILL.md` | 调度方案生成工作流 |
 
 ## 架构
 
 ```
-Agent ←→ MCP ←WebSocket→ UE-server ←→ UE场景
-           ↓
-          SQLite数据库
+Agent ←→ MCP (FastMCP, HTTP/8082)
+           ├── Access 数据库 (data.mdb)
+           ├── RegualDispacth.exe (调度计算)
+           ├── SQLite 数据库 (flood_control.db)
+           ├── 外部 API (数据/新安江/图斑分析)
+           └── WebSocket → UE 场景
 ```
 
-MCP服务通过WebSocket与UE服务通信，所有场景操作同步执行并等待UE返回结果。数据库存储水库、水文站、雨量站、调度方案等数据。
-
-## 传输方式
-
-支持两种传输方式：
-
-1. **stdio** (默认): 用于 Claude Desktop 等本地客户端
-   ```bash
-   uv run mcp-server
-   ```
-
-2. **streamable-http**: 用于 Web 应用，支持 HTTP 请求
-   ```bash
-   uv run python -c "from src.server import run_server; run_server(transport='streamable-http')"
-   ```
-
-## 开发命令
+## 测试
 
 ```bash
-# 安装依赖
-make install
+# 全功能系统测试
+uv run python test/mcp_full_system_test.py
 
-# 启动服务（stdio模式）
-make start
+# 流量约束 + 水库统计测试
+uv run python test/test_new_flow_feature.py
 
-# 启动服务（HTTP模式）
-make start-http
+# 参数模板测试
+uv run python test/test_parameter_templates.py
 
-# 代码格式化
-make
+# 清空数据库表后测试
+uv run python test/clear_and_test.py
+```
+
+## 注意事项
+
+1. **参数模板不可修改**：`Parameter_template/` 目录下的模板文件为只读参考，用户可复制参数到 Access 数据库或通过自然语言对话修改数据库，但不能修改模板文件
+2. **需要 Access 数据库驱动**：Windows 系统需安装 Microsoft Access Database Engine
+3. **RegualDispacth.exe**：需放置在项目根目录下
+4. **编码问题**：Windows 系统建议设置 `PYTHONUTF8=1` 环境变量避免编码错误

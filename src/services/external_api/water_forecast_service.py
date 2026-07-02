@@ -243,7 +243,7 @@ class WaterForecastService:
     def get_scheme_list(self, start_time: str, end_time: str) -> Dict[str, Any]:
         """获取预报方案清单"""
         try:
-            url = f"{self._base_url}/huangheApi/preSch/getRecommendedOrLatestSchList"
+            url = f"{self._base_url}/huangheApi/preSch/getRecommendedOrLatestSchList?startTime={start_time}&endTime={end_time}"
             headers = {
                 **water_forecast_auth_service.get_auth_headers(),
                 "Content-Type": "application/json"
