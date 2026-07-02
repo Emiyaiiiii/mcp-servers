@@ -1,5 +1,0 @@
-- [x] 远程 master 已成功拉取到本地（origin/master: fedee4c → 030a741）
-- [x] 新分支 `feat/sync-upstream-with-changes` 已创建并基于 `origin/master`
-- [x] 当前分支所有修改已合并到新分支，冲突已解决（forecast_models.py 保留上游 rainfall_similarity_analysis + 合并所有业务修改）
-- [x] 所有业务修改都已保留（参数模板、水库统计、流量约束、dispatch_param、新安江模型等）
-- [ ] 新分支已推送到远程 GitHub（网络不通，需手动执行 `git push -u origin feat/sync-upstream-with-changes`）
