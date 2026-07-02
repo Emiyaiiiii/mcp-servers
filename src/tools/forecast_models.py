@@ -6,6 +6,7 @@ import time
 import pyodbc
 import pandas as pd
 import requests
+import platform
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import List, Dict, Any, Optional, Tuple
@@ -17,6 +18,133 @@ from src.services.external_api.water_forecast_service import water_forecast_serv
 from src.utils.station_codes import get_reservoir_code, get_hydrology_code
 
 logger = get_logger(__name__)
+
+
+def _mdb_execute(cursor, sql: str, params: tuple = None):
+    """Execute SQL on MDB database, compatible with MDBTools driver that doesn't support SQLNumParams.
+
+    MDBTools ODBC driver does not support parameterized queries (SQLNumParams),
+    so we manually interpolate parameters into the SQL string with proper escaping.
+    """
+    if params:
+        escaped_params = []
+        for p in params:
+            if p is None:
+                escaped_params.append("NULL")
+            elif isinstance(p, float):
+                # MDBTools SQL parser doesn't support trailing '.0' on whole floats
+                if p == int(p):
+                    escaped_params.append(str(int(p)))
+                else:
+                    escaped_params.append(str(p))
+            elif isinstance(p, int):
+                escaped_params.append(str(p))
+            elif isinstance(p, str):
+                escaped_p = p.replace("'", "''")
+                escaped_params.append(f"'{escaped_p}'")
+            else:
+                escaped_p = str(p).replace("'", "''")
+                escaped_params.append(f"'{escaped_p}'")
+
+        parts = sql.split('?')
+        if len(parts) - 1 != len(escaped_params):
+            raise ValueError(
+                f"Parameter count mismatch: SQL has {len(parts)-1} placeholders, got {len(escaped_params)} params"
+            )
+
+        result_sql = ""
+        for i, part in enumerate(parts):
+            result_sql += part
+            if i < len(escaped_params):
+                result_sql += escaped_params[i]
+
+        logger.debug(f"_mdb_execute SQL: {result_sql}")
+        return cursor.execute(result_sql)
+    else:
+        return cursor.execute(sql)
+
+
+def _mdb_update_field(mdb_path: str, table_name: str, column_name: str, new_value: float, key_column: str, key_value: int):
+    """Update a numeric field in an MDB table using the compiled mdb_update helper.
+
+    MDBTools ODBC driver's SQL parser only supports SELECT, not UPDATE.
+    This function calls a compiled C helper that directly modifies the MDB file.
+
+    Args:
+        mdb_path: Path to the .mdb file
+        table_name: Table name (e.g. "Dispatch_Par")
+        column_name: Column to update (e.g. "Control_Par")
+        new_value: New value
+        key_column: Key column for WHERE clause (e.g. "stcd")
+        key_value: Key value
+    """
+    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "src", "utils", "mdb_update")
+    if platform.system() == "Windows":
+        helper_path += ".exe"
+
+    if not os.path.exists(helper_path):
+        raise FileNotFoundError(f"mdb_update helper not found: {helper_path}")
+
+    cmd = [helper_path, mdb_path, table_name, column_name, str(new_value), key_column, str(key_value)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"mdb_update failed: {result.stderr.strip() or result.stdout.strip()}")
+    return True
+
+
+def _mdb_clear_table(mdb_path: str, table_name: str):
+    """Delete all rows from an MDB table using the compiled mdb_clear_table helper.
+
+    MDBTools ODBC driver's SQL parser only supports SELECT, not DELETE.
+    This function calls a compiled C helper that directly marks all rows as deleted.
+
+    Args:
+        mdb_path: Path to the .mdb file
+        table_name: Table name
+    """
+    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "src", "utils", "mdb_clear_table")
+    if platform.system() == "Windows":
+        helper_path += ".exe"
+
+    if not os.path.exists(helper_path):
+        raise FileNotFoundError(f"mdb_clear_table helper not found: {helper_path}")
+
+    cmd = [helper_path, mdb_path, table_name]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"mdb_clear_table failed: {result.stderr.strip() or result.stdout.strip()}")
+    return True
+
+
+def _mdb_insert_rows(mdb_path: str, table_name: str, rows: list):
+    """Insert multiple rows into an MDB table using the compiled mdb_insert_row helper.
+
+    MDBTools ODBC driver's SQL parser only supports SELECT, not INSERT.
+    This function calls a compiled C helper that reanimates deleted rows
+    with new data via direct page manipulation.
+
+    Args:
+        mdb_path: Path to the .mdb file
+        table_name: Table name
+        rows: List of lists, each inner list contains the column values as strings
+    """
+    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "src", "utils", "mdb_insert_row")
+    if platform.system() == "Windows":
+        helper_path += ".exe"
+
+    if not os.path.exists(helper_path):
+        raise FileNotFoundError(f"mdb_insert_row helper not found: {helper_path}")
+
+    # Format rows as tab-separated values
+    tsv_data = "\n".join("\t".join(str(v) for v in row) for row in rows)
+    result = subprocess.run([helper_path, mdb_path, table_name],
+                           input=tsv_data, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"mdb_insert_row failed: {result.stderr.strip() or result.stdout.strip()}")
+    return True
 
 
 def register_forecast_models(mcp: FastMCP):
@@ -239,40 +367,46 @@ def register_forecast_models(mcp: FastMCP):
 
             df_sd = pd.read_excel(sd_path)
             df_xd = pd.read_excel(xd_path)
-
-            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+            
+            # 判断系统自动切换驱动
+            if platform.system() == "Windows":
+                driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
+            else:
+                driver_name = "MDBTools"
+            
+            conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
 
-            cursor.execute("DELETE FROM Q_Inputsd")
-            cursor.execute("DELETE FROM Q_Inputxd")
+            # 使用 mdb_clear_table 工具清空表（ODBC 驱动不支持 DELETE）
+            _mdb_clear_table(mdb_path, "Q_Inputsd")
+            _mdb_clear_table(mdb_path, "Q_Inputxd")
             conn.commit()
 
-            sd_rows = 0
+            # 使用 mdb_insert_rows 工具批量插入数据（ODBC 驱动不支持 INSERT）
+            sd_rows = []
             for _, row in df_sd.iterrows():
-                cursor.execute(
-                    "INSERT INTO Q_Inputsd (stcd, stnm, tm, q) VALUES (?, ?, ?, ?)",
-                    (row.get('stcd', ''), row.get('stnm', ''), row.get('tm', ''), row.get('q', 0))
-                )
-                sd_rows += 1
-            conn.commit()
+                sd_rows.append([str(row.get('stcd', '')), str(row.get('stnm', '')),
+                               str(row.get('tm', '')), str(row.get('q', 0))])
+            _mdb_insert_rows(mdb_path, "Q_Inputsd", sd_rows)
+            sd_count = len(sd_rows)
+            sd_rows = None
 
-            xd_rows = 0
+            xd_rows = []
             for _, row in df_xd.iterrows():
-                cursor.execute(
-                    "INSERT INTO Q_Inputxd (stcd, stnm, tm, q) VALUES (?, ?, ?, ?)",
-                    (row.get('stcd', ''), row.get('stnm', ''), row.get('tm', ''), row.get('q', 0))
-                )
-                xd_rows += 1
-            conn.commit()
+                xd_rows.append([str(row.get('stcd', '')), str(row.get('stnm', '')),
+                               str(row.get('tm', '')), str(row.get('q', 0))])
+            _mdb_insert_rows(mdb_path, "Q_Inputxd", xd_rows)
+            xd_count = len(xd_rows)
+            xd_rows = None
 
             import_elapsed = round(time.time() - import_start, 2)
             steps["import"] = {
-                "Q_Inputsd_rows": sd_rows,
-                "Q_Inputxd_rows": xd_rows,
+                "Q_Inputsd_rows": sd_count,
+                "Q_Inputxd_rows": xd_count,
                 "elapsed_seconds": import_elapsed
             }
-            logger.info(f"导入完成: Q_Inputsd={sd_rows}行, Q_Inputxd={xd_rows}行, 耗时{import_elapsed}秒")
+            logger.info(f"导入完成: Q_Inputsd={sd_count}行, Q_Inputxd={xd_count}行, 耗时{import_elapsed}秒")
 
             # ================================================================
             # 步骤2: 运行调度计算程序
@@ -305,8 +439,10 @@ def register_forecast_models(mcp: FastMCP):
             logger.info("步骤3: 读取Q_Output并统计处理")
             stats_start = time.time()
 
-            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output ORDER BY tm, stcd")
+            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output")
             rows = cursor.fetchall()
+            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
+            rows.sort(key=lambda r: (str(r.tm), str(r.stcd)))
 
             output_data = []
             for row in rows:
@@ -1294,7 +1430,13 @@ def register_forecast_models(mcp: FastMCP):
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
-        conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+        # 判断系统自动切换驱动
+        if platform.system() == "Windows":
+            driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
+        else:
+            driver_name = "MDBTools"
+
+        conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
         conn = None
 
         try:
@@ -1302,8 +1444,10 @@ def register_forecast_models(mcp: FastMCP):
             cursor = conn.cursor()
 
             if action == "list":
-                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par ORDER BY stcd")
+                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
                 rows = cursor.fetchall()
+                # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
+                rows.sort(key=lambda r: str(r.stcd))
                 params = []
                 for row in rows:
                     params.append({
@@ -1329,15 +1473,18 @@ def register_forecast_models(mcp: FastMCP):
                         "error": "update 操作需要提供 station_name、param_desc 和 new_value 参数"
                     }
 
-                cursor.execute(
-                    "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stnm = ? AND Instruction LIKE ?",
-                    (station_name, f'%{param_desc}%')
-                )
-                matches = cursor.fetchall()
+                # MDBTools SQL 解析器不支持 LIKE，先查询全部再用 Python 过滤
+                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
+                all_rows = cursor.fetchall()
+                matches = [row for row in all_rows
+                          if row.stnm and row.stnm.strip() == station_name
+                          and row.Instruction and param_desc in row.Instruction]
 
                 if len(matches) == 0:
-                    cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par ORDER BY stcd")
+                    cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
                     all_rows = cursor.fetchall()
+                    # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
+                    all_rows.sort(key=lambda r: str(r.stcd))
                     all_params = []
                     for row in all_rows:
                         all_params.append({
@@ -1378,11 +1525,8 @@ def register_forecast_models(mcp: FastMCP):
                         "Instruction": row.Instruction.strip() if row.Instruction else ""
                     }
 
-                    cursor.execute(
-                        "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ? AND stnm = ? AND Instruction = ?",
-                        (new_value, row.stcd, row.stnm, row.Instruction)
-                    )
-                    conn.commit()
+                    # 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
+                    _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_value, "stcd", row.stcd)
 
                     after = {
                         "stcd": row.stcd,
@@ -1457,7 +1601,13 @@ def register_forecast_models(mcp: FastMCP):
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
-        conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+        # 判断系统自动切换驱动
+        if platform.system() == "Windows":
+            driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
+        else:
+            driver_name = "MDBTools"
+
+        conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
         conn = None
 
         try:
@@ -1470,7 +1620,8 @@ def register_forecast_models(mcp: FastMCP):
                 new_val = round(new_val, 2)
 
                 # 查询当前值
-                cursor.execute(
+                _mdb_execute(
+                    cursor,
                     "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stcd = ?",
                     (stcd,)
                 )
@@ -1483,11 +1634,8 @@ def register_forecast_models(mcp: FastMCP):
                 if old_val is not None and abs(old_val - new_val) < 0.01:
                     continue
 
-                cursor.execute(
-                    "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ?",
-                    (new_val, stcd)
-                )
-                conn.commit()
+                # 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
+                _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_val, "stcd", stcd)
 
                 updated.append({
                     "stcd": stcd,
@@ -1563,8 +1711,10 @@ def register_forecast_models(mcp: FastMCP):
 
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT stcd, stnm, tm, Qin, Qout, z, v FROM Z_Output ORDER BY stcd, tm")
+            cursor.execute("SELECT stcd, stnm, tm, Qin, Qout, z, v FROM Z_Output")
             rows = cursor.fetchall()
+            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
+            rows.sort(key=lambda r: (str(r.stcd), str(r.tm)))
 
             if not rows:
                 logger.warning("Z_Output 表为空，无法提取水库统计指标")
@@ -1852,13 +2002,22 @@ def register_forecast_models(mcp: FastMCP):
             if not os.path.exists(mdb_path):
                 return {"success": False, "error": f"数据库文件不存在: {mdb_path}"}
 
-            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+            # 判断系统自动切换驱动
+            if platform.system() == "Windows":
+                driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
+            else:
+                driver_name = "MDBTools"
+
+            conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
 
             # 读取修改前的值用于对比
-            cursor.execute("SELECT stcd, Control_Par FROM Dispatch_Par ORDER BY stcd")
-            before_map = {row.stcd: row.Control_Par for row in cursor.fetchall()}
+            cursor.execute("SELECT stcd, Control_Par FROM Dispatch_Par")
+            rows = cursor.fetchall()
+            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
+            rows.sort(key=lambda r: str(r.stcd))
+            before_map = {row.stcd: row.Control_Par for row in rows}
 
             updated_params = []
             update_count = 0
@@ -1867,14 +2026,11 @@ def register_forecast_models(mcp: FastMCP):
                 new_value = row.get('Control_Par', 0)
                 if stcd == '':
                     continue
-                cursor.execute(
-                    "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ?",
-                    (new_value, stcd)
-                )
-                if cursor.rowcount > 0:
-                    update_count += 1
-                    old_value = before_map.get(stcd, None)
-                    if old_value != new_value:
+                # 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
+                _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_value, "stcd", int(stcd))
+                update_count += 1
+                old_value = before_map.get(int(stcd), None)
+                if old_value != new_value:
                         updated_params.append({
                             "stcd": stcd,
                             "stnm": str(row.get('stnm', '')).strip(),
@@ -1974,12 +2130,20 @@ def register_forecast_models(mcp: FastMCP):
             # 3. 读取 Q_Output 实际结果
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             mdb_path = os.path.join(project_root, '6', 'data.mdb')
-            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+            # 判断系统自动切换驱动
+            if platform.system() == "Windows":
+                driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
+            else:
+                driver_name = "MDBTools"
+
+            conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
 
-            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output ORDER BY tm, stcd")
+            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output")
             actual_rows = cursor.fetchall()
+            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
+            actual_rows.sort(key=lambda r: (str(r.tm), str(r.stcd)))
             conn.close()
 
             # 构建实际数据索引: {(stnm, tm_str): q}
