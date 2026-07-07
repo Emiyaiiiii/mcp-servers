@@ -5,7 +5,7 @@
       "url": "http://localhost:8082/mcp",
       "command": "uv",
       "args": ["run", "mcp-server"],
-      "cwd": "D:\\code\\mcp-servers"
+      "cwd": "/mnt/d/workspace/Flood-Control-Four-Pre-System/mcp-servers"
     }
   }
 }

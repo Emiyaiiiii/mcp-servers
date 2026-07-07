@@ -50,6 +50,3 @@ storage/
 *.sqlite3.db
 
 docs/
-
-# 忽略过程性文件
-.trae/
