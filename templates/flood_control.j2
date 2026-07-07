@@ -1,0 +1,41 @@
+# 黄河中下游洪水调度预案
+## 一、基础信息
+- 适用范围：黄河中下游流域
+- 依据文件：《黄河洪水调度方案》《黄河防汛抗旱应急预案》《河南省黄河滩区运用预案》《山东省黄河滩区运用预案》
+- 数据基准：实时雨水工情、未来3日降雨预报、流域分区面雨量、干支流径流与洪水预报
+- 生成时间：{{ generation_time }}
+
+## 二、实时雨水工情
+1. **雨情实况**：{{ rainfall_situation if rainfall_situation else '待更新' }}
+2. **水情实况**
+    - 河道水情：{{ river_situation if river_situation else '待更新' }}
+    - 水库水情：{{ reservoir_situation if reservoir_situation else '待更新' }}
+3. **工情险情**：{{ engineering_situation if engineering_situation else '暂无险情' }}
+
+## 三、预报
+1. **降雨预报**
+    - 未来0-24/24-48/48-72小时降水分布：{{ rainfall_forecast if rainfall_forecast else '待更新' }}
+    - 流域分区面平均雨量：{{ area_rainfall if area_rainfall else '待更新' }}
+2. **洪水预报**
+    - 上游径流预报：{{ upstream_forecast if upstream_forecast else '待更新' }}
+    - 中下游洪峰预报：{{ downstream_forecast if downstream_forecast else '待更新' }}
+
+## 四、水库群调度方案
+1. **三门峡水库**：{{ sanmenxia_scheme if sanmenxia_scheme else '按潼关来水来沙敞泄运用' }}
+2. **小浪底水库**：{{ xiaolangdi_scheme if xiaolangdi_scheme else '控制花园口流量≤4500m³/s' }}
+3. **陆浑水库**：{{ luhun_scheme if luhun_scheme else '下泄流量≤1000m³/s' }}
+4. **故县水库**：{{ guxian_scheme if guxian_scheme else '下泄流量≤1000m³/s' }}
+5. **河口村水库**：{{ hekoucun_scheme if hekoucun_scheme else '控制武陟流量≤2000m³/s' }}
+
+## 五、预警与风险评估
+1. **黄河总体应急响应**：{{ overall_response if overall_response else '无预警' }}
+2. **小浪底水库预警等级**：{{ xiaolangdi_warning if xiaolangdi_warning else '无预警' }}
+3. **三门峡水库预警等级**：{{ sanmenxia_warning if sanmenxia_warning else '无预警' }}
+4. **花园口出险等级**：{{ risk_level if risk_level else '正常' }}
+
+## 六、调度结果与应对措施
+1. **工情险情预判**：{{ danger_prediction if danger_prediction else '待评估' }}
+2. **应急保障措施**：{{ emergency_measures if emergency_measures else '待部署' }}
+
+## 七、处置建议
+{{ suggestions if suggestions else '请根据实时数据制定具体措施' }}

@@ -1,0 +1,32 @@
+services:
+  mcp-server:
+    build: .
+    container_name: deer-flow-mcp-server
+    restart: always
+    ports:
+      - "8082:8082"
+    volumes:
+      - .:/app
+      - mcp-storage:/app/storage
+    environment:
+      - SCENE_WS_BASE_URL=ws://ue-server:8889
+      - DATA_API_MOCK_ENABLED=true
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    networks:
+      - deer-flow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/mcp/info').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  deer-flow:
+    name: deer-flow_deer-flow
+    external: true
+
+volumes:
+  mcp-storage:
+    driver: local

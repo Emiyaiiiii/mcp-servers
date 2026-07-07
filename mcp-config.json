@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "flood-control": {
+      "transport": "http",
+      "url": "http://localhost:8082/mcp",
+      "command": "uv",
+      "args": ["run", "mcp-server"],
+      "cwd": "D:\\code\\mcp-servers"
+    }
+  }
+}
