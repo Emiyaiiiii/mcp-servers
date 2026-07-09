@@ -449,7 +449,7 @@ def register_forecast_models(mcp: FastMCP):
                 output_data.append({
                     "stcd": row.stcd,
                     "stnm": row.stnm.strip() if row.stnm else "",
-                    "tm": row.tm,
+                    "tm": str(row.tm) if row.tm else "",
                     "q": row.q
                 })
 
@@ -491,6 +491,40 @@ def register_forecast_models(mcp: FastMCP):
             reservoir_stats, reservoir_table = _calculate_reservoir_stats(conn)
             logger.info(f"已从 Z_Output 提取 {len(reservoir_stats)} 个水库的统计指标")
 
+            # 从 Z_Output 读取水库时序数据，转换为 reservoirs 字典格式
+            reservoirs = {}
+            cursor.execute("SELECT stcd, stnm, tm, Qin, Qout, z, v FROM Z_Output")
+            z_rows = cursor.fetchall()
+            z_rows.sort(key=lambda r: (str(r.stcd), str(r.tm)))
+            for row in z_rows:
+                res_name = row.stnm.strip() if row.stnm else ""
+                if res_name:
+                    res_name_full = res_name + "水库"
+                    if res_name_full not in reservoirs:
+                        reservoirs[res_name_full] = {"timeseries": []}
+                    reservoirs[res_name_full]["timeseries"].append({
+                        "water_level": round(float(row.z), 2) if row.z is not None else None,
+                        "inflow": round(float(row.Qin), 2) if row.Qin is not None else None,
+                        "outflow": round(float(row.Qout), 2) if row.Qout is not None else None,
+                        "storage": round(float(row.v), 2) if row.v is not None else None,
+                        "time": str(row.tm)
+                    })
+            logger.info(f"已构建 {len(reservoirs)} 个水库的时序数据")
+
+            # 将 Q_Output 站点数据转换为 hydrological_stations 字典格式
+            hydrological_stations = {}
+            for item in output_data:
+                stnm = item["stnm"]
+                if stnm:
+                    if stnm not in hydrological_stations:
+                        hydrological_stations[stnm] = {"timeseries": []}
+                    hydrological_stations[stnm]["timeseries"].append({
+                        "flow": round(float(item["q"]), 2) if item["q"] is not None else None,
+                        "level": None,
+                        "time": str(item["tm"])
+                    })
+            logger.info(f"已构建 {len(hydrological_stations)} 个水文站的时序数据")
+
             conn.close()
 
             # ================================================================
@@ -506,11 +540,9 @@ def register_forecast_models(mcp: FastMCP):
                 "end_date": time_range_end[:10] if time_range_end else "",
                 "status": "active",
                 "constraints": [],
-                "details": [],
                 "constraints_applied": {},
-                "station_stats": station_stats,
-                "output_data": output_data,
-                "steps": steps
+                "reservoirs": reservoirs,
+                "hydrological_stations": hydrological_stations
             }
 
             saved_scheme_id = save_scheme(scheme_data)

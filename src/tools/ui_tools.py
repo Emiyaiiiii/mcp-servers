@@ -503,7 +503,6 @@ def register_ui_tools(mcp: FastMCP):
             task_id=task_id,
             scheme_id=scheme_id,
             scheme_name=scheme.get("scheme_name", ""),
-            scheme=scheme,
             reservoir_schemes=reservoir_schemes
         )
         logger.debug(f"send_simulation_command 返回结果: {return_value}")

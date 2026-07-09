@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     sqlite3 \
+    libglib2.0-dev mdbtools-dev unixodbc unixodbc-dev mdbtools odbc-mdbtools \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
