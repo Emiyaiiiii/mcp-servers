@@ -8,6 +8,7 @@ from src.utils.station_codes import (
     get_all_reservoirs, get_all_stations,
     get_reservoir_station_code
 )
+from src.services.storage.database.data_access import ReservoirAccess, HydrologyStationAccess
 from src.utils.response_helper import success_response, error_response
 from src.utils.logger import get_logger
 
@@ -86,11 +87,21 @@ def register_ui_tools(mcp: FastMCP):
 
         reservoir_name_cn = _get_reservoir_name_by_code(code)
         station_code = get_reservoir_station_code(code)
+
+        # 从数据库获取水库坐标信息
+        reservoir = ReservoirAccess.get_by_code(code)
+        longitude = reservoir.get("longitude") if reservoir else None
+        latitude = reservoir.get("latitude") if reservoir else None
+        elevation = reservoir.get("elevation") if reservoir else None
+
         data = {
             "reservoir": station_code or code,
             "reservoir_name": reservoir_name_cn or reservoir_name,
             "start_time": start_time,
-            "end_time": end_time
+            "end_time": end_time,
+            "longitude": longitude,
+            "latitude": latitude,
+            "elevation": elevation,
         }
 
         result = await command_sender.send_ui_command("FUNC_UI_OPEN_RESERVOIR_DETAIL", data)
@@ -154,11 +165,19 @@ def register_ui_tools(mcp: FastMCP):
             return return_value
 
         station_name_cn = _get_station_name_by_code(code)
+
+        # 从数据库获取水文站坐标信息
+        station = HydrologyStationAccess.get_by_code(code)
+        longitude = station.get("longitude") if station else None
+        latitude = station.get("latitude") if station else None
+
         data = {
             "station": code,
             "station_name": station_name_cn or station_name,
             "start_time": start_time,
-            "end_time": end_time
+            "end_time": end_time,
+            "longitude": longitude,
+            "latitude": latitude
         }
 
         result = await command_sender.send_ui_command("FUNC_UI_OPEN_STATION_DETAIL", data)
