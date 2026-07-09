@@ -5,6 +5,7 @@
 - 来水预报 API (water_forecast_service)
 - 增强搜索 API (enhanced_search_service)
 - 新安江模型 API (xinanjiang_service)
+- 水文局预报 API (hydrology_forecast_service)
 """
 
 from src.services.external_api.auth_service import auth_service, AuthService
@@ -26,6 +27,10 @@ from src.services.external_api.xinanjiang_service import (
     xinanjiang_model_service,
     XinanjiangModelService
 )
+from src.services.external_api.hydrology_forecast_service import (
+    hydrology_forecast_service,
+    HydrologyForecastService
+)
 
 __all__ = [
     # 数据 API
@@ -46,4 +51,7 @@ __all__ = [
     'XinanjiangAuthService',
     'xinanjiang_model_service',
     'XinanjiangModelService',
+    # 水文局预报 API
+    'hydrology_forecast_service',
+    'HydrologyForecastService',
 ]
