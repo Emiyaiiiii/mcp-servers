@@ -1,0 +1,44 @@
+# 忽略 Python 虚拟环境（包含不兼容的符号链接）
+.venv/
+env/
+venv/
+
+# 忽略 Python 编译产物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略环境变量
+.env
+.env.local
+
+# 忽略日志和临时文件
+logs/
+*.log
+*.swp
+*.swo
+
+# 忽略 IDE 配置
+.vscode/
+.idea/
+
+# 忽略测试和文档
+docs/
+test/
+tests/
+
+# 忽略 Git
+.git/
+.gitignore
+
+# 忽略存储目录（运行时挂载）
+storage/
+
+# 忽略数据库文件
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+storage/

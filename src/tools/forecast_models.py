@@ -80,7 +80,7 @@ def _mdb_update_field(mdb_path: str, table_name: str, column_name: str, new_valu
         key_value: Key value
     """
     helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                               "src", "utils", "mdb_update")
+                               "src", "services", "external_api", "RegualDispacth", "c", "mdb_update")
     if platform.system() == "Windows":
         helper_path += ".exe"
 
@@ -105,7 +105,7 @@ def _mdb_clear_table(mdb_path: str, table_name: str):
         table_name: Table name
     """
     helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                               "src", "utils", "mdb_clear_table")
+                               "src", "services", "external_api", "RegualDispacth", "c", "mdb_clear_table")
     if platform.system() == "Windows":
         helper_path += ".exe"
 
@@ -132,7 +132,7 @@ def _mdb_insert_rows(mdb_path: str, table_name: str, rows: list):
         rows: List of lists, each inner list contains the column values as strings
     """
     helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                               "src", "utils", "mdb_insert_row")
+                               "src", "services", "external_api", "RegualDispacth", "c", "mdb_insert_row")
     if platform.system() == "Windows":
         helper_path += ".exe"
 
@@ -340,8 +340,9 @@ def register_forecast_models(mcp: FastMCP):
         logger.info(f"调用 generate_dispatch_scheme，收到参数: _start_time={repr(_start_time)}，flood_type={repr(flood_type)}")
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        mdb_path = os.path.join(project_root, '6', 'data.mdb')
-        exe_path = os.path.join(project_root, 'RegualDispacth.exe')
+        dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+        mdb_path = os.path.join(dispatch_dir, '6', 'data.mdb')
+        exe_path = os.path.join(dispatch_dir, 'RegualDispacth.exe')
 
         total_start = time.time()
         steps = {}
@@ -406,7 +407,7 @@ def register_forecast_models(mcp: FastMCP):
 
             result = subprocess.run(
                 [exe_path],
-                cwd=project_root,
+                cwd=dispatch_dir,
                 capture_output=True,
                 text=True,
                 timeout=300
@@ -1462,7 +1463,8 @@ def register_forecast_models(mcp: FastMCP):
         logger.info(f"调用 modify_dispatch_param，action={action}, station_name={station_name}, param_desc={param_desc}, new_value={new_value}")
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        mdb_path = os.path.join(project_root, '6', 'data.mdb')
+        dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+        mdb_path = os.path.join(dispatch_dir, '6', 'data.mdb')
         # 判断系统自动切换驱动
         if platform.system() == "Windows":
             driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
@@ -1506,11 +1508,15 @@ def register_forecast_models(mcp: FastMCP):
                         "error": "update 操作需要提供 station_name、param_desc 和 new_value 参数"
                     }
 
-                cursor.execute(
-                    "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stnm = ? AND Instruction LIKE ?",
-                    (station_name, f'%{param_desc}%')
-                )
-                matches = cursor.fetchall()
+                # MDBTools ODBC 驱动不支持 LIKE 中文匹配，拉取全部数据在 Python 中过滤
+                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
+                all_rows = cursor.fetchall()
+                matches = []
+                for row in all_rows:
+                    r_stnm = row.stnm.strip() if row.stnm else ""
+                    r_inst = row.Instruction.strip() if row.Instruction else ""
+                    if r_stnm == station_name and (param_desc.isdigit() and str(row.stcd) == param_desc or param_desc in r_inst):
+                        matches.append(row)
 
                 if len(matches) == 0:
                     cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
@@ -1556,12 +1562,8 @@ def register_forecast_models(mcp: FastMCP):
                         "Instruction": row.Instruction.strip() if row.Instruction else ""
                     }
 
-                    #TODO 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
-                    cursor.execute(
-                        "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ? AND stnm = ? AND Instruction = ?",
-                        (new_value, row.stcd, row.stnm, row.Instruction)
-                    )
-                    conn.commit()
+                    # MDBTools ODBC 驱动不支持 UPDATE，使用 mdb_update 工具直接写入 MDB 文件
+                    _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_value, "stcd", row.stcd)
 
                     after = {
                         "stcd": row.stcd,
@@ -1635,7 +1637,8 @@ def register_forecast_models(mcp: FastMCP):
             }
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        mdb_path = os.path.join(project_root, '6', 'data.mdb')
+        dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+        mdb_path = os.path.join(dispatch_dir, '6', 'data.mdb')
         # 判断系统自动切换驱动
         if platform.system() == "Windows":
             driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
@@ -1808,7 +1811,8 @@ def register_forecast_models(mcp: FastMCP):
 
         # 2. 写入 Access 数据库
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        mdb_path = os.path.join(project_root, '6', 'data.mdb')
+        dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+        mdb_path = os.path.join(dispatch_dir, '6', 'data.mdb')
 
         if not os.path.exists(mdb_path):
             return {
@@ -2181,7 +2185,7 @@ def register_forecast_models(mcp: FastMCP):
             }
         """
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        template_dir = os.path.join(project_root, 'Parameter_template')
+        template_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth', 'Parameter_template')
 
         templates = {}
         if not os.path.exists(template_dir):
@@ -2388,7 +2392,8 @@ def register_forecast_models(mcp: FastMCP):
 
             # 3. 连接 MDB 并更新 Dispatch_Par
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            mdb_path = os.path.join(project_root, '6', 'data.mdb')
+            dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+            mdb_path = os.path.join(dispatch_dir, '6', 'data.mdb')
 
             if not os.path.exists(mdb_path):
                 return {"success": False, "error": f"数据库文件不存在: {mdb_path}"}
@@ -2520,7 +2525,8 @@ def register_forecast_models(mcp: FastMCP):
 
             # 3. 读取 Q_Output 实际结果
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            mdb_path = os.path.join(project_root, '6', 'data.mdb')
+            dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+            mdb_path = os.path.join(dispatch_dir, '6', 'data.mdb')
             # 判断系统自动切换驱动
             if platform.system() == "Windows":
                 driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"

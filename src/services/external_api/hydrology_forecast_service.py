@@ -330,8 +330,8 @@ class HydrologyForecastService:
     def _run_mdb_tool(self, tool_name: str, mdb_path: str, table_name: str = None, data: str = None):
         """运行 MDB 辅助工具"""
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        utils_dir = os.path.join(project_root, "src", "utils")
-        helper_path = os.path.join(utils_dir, tool_name)
+        dispatch_dir = os.path.join(project_root, "src", "services", "external_api", "RegualDispacth", "c")
+        helper_path = os.path.join(dispatch_dir, tool_name)
         if platform.system() == "Windows":
             helper_path += ".exe"
 
