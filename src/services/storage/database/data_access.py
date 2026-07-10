@@ -698,49 +698,11 @@ class SchemeAccess:
         """获取所有调度方案"""
         sql = "SELECT * FROM schemes ORDER BY created_at DESC"
         results = get_db().execute_query(sql)
-        
         for r in results:
             if r.get('constraints'):
                 r['constraints'] = json.loads(r['constraints'])
             if r.get('details'):
                 r['details'] = json.loads(r['details'])
-            
-            scheme_id = r['scheme_id']
-            
-            reservoirs_sql = """
-                SELECT * FROM scheme_reservoirs WHERE scheme_id = ?
-            """
-            reservoirs = get_db().execute_query(reservoirs_sql, (scheme_id,))
-            r['reservoirs'] = {}
-            for res in reservoirs:
-                res_data = {
-                    'timeseries': json.loads(res['timeseries']) if res['timeseries'] else []
-                }
-                if res['max_level'] is not None:
-                    res_data['max_level'] = res['max_level']
-                if res['max_inflow'] is not None:
-                    res_data['max_inflow'] = res['max_inflow']
-                if res['max_outflow'] is not None:
-                    res_data['max_outflow'] = res['max_outflow']
-                if res['max_storage'] is not None:
-                    res_data['max_storage'] = res['max_storage']
-                r['reservoirs'][res['reservoir_code']] = res_data
-            
-            stations_sql = """
-                SELECT * FROM scheme_stations WHERE scheme_id = ?
-            """
-            stations = get_db().execute_query(stations_sql, (scheme_id,))
-            r['hydrological_stations'] = {}
-            for s in stations:
-                station_data = {
-                    'timeseries': json.loads(s['timeseries']) if s['timeseries'] else []
-                }
-                if s['max_flow'] is not None:
-                    station_data['max_flow'] = s['max_flow']
-                if s['max_level'] is not None:
-                    station_data['max_level'] = s['max_level']
-                r['hydrological_stations'][s['station_code']] = station_data
-        
         return results
     
     @staticmethod

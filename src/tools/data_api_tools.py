@@ -1,5 +1,4 @@
 import asyncio
-from logging import info
 import requests
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Tuple

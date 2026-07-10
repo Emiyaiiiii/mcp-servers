@@ -14,6 +14,9 @@ from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
 from src.services.communication.websocket_manager import websocket_handler
 from src.services.communication.session_middleware import SessionIDMiddleware
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_frontend_path():
@@ -114,9 +117,9 @@ def run_server(transport="streamable-http"):
         Route("/{path:path}", serve_static_file)
     )
     
-    print(f"🚀 MCP 服务已启动: http://localhost:8082")
-    print(f"📡 WebSocket 端点: ws://localhost:8082/browser")
-    print(f"🌐 前端页面: http://localhost:8082/index.html")
+    logger.info(f"MCP 服务已启动: http://localhost:8082")
+    logger.info(f"WebSocket 端点: ws://localhost:8082/browser")
+    logger.info(f"前端页面: http://localhost:8082/index.html")
     
     # 使用 uvicorn 启动应用
     uvicorn.run(

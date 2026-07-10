@@ -50,3 +50,4 @@ storage/
 *.sqlite3.db
 
 docs/
+.trae/
