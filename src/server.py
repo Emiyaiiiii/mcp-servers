@@ -121,12 +121,12 @@ def run_server(transport="streamable-http"):
     logger.info(f"WebSocket 端点: ws://localhost:8082/browser")
     logger.info(f"前端页面: http://localhost:8082/index.html")
     
-    # 使用 uvicorn 启动应用
+    # 使用 uvicorn 启动应用，log_level 设置为 warning 避免框架日志干扰
     uvicorn.run(
         starlette_app,
         host="0.0.0.0",
         port=8082,
-        log_level="info"
+        log_level="warning"
     )
 
 mcp = create_app()

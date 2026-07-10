@@ -8,6 +8,8 @@ def get_logger(name):
     level = getattr(logging, log_level, logging.INFO)
     logger.setLevel(level)
     
+    logger.propagate = False
+    
     if not logger.handlers:
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         
