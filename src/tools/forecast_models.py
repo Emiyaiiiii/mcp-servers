@@ -1611,7 +1611,9 @@ def register_forecast_models(mcp: FastMCP):
         """
         设置指定站点的流量约束，自动调整 Dispatch_Par 表中的相关参数。
 
-        例如：控制花园口流量不超过13000，会自动调整小浪底保滩流量、花园口控制流量等 6 个相关参数。
+        例如：控制花园口流量不超过13000，会自动调整 15 个相关参数：
+        - 直接控制参数（6个）：小浪底预泄/保滩/转控流量、花园口退水阈值/控制流量/关门流量
+        - 间接控制参数（9个）：河口村关门水位、小浪底判别水位/发电流量、陆浑/故县控制流量及发电流量、河口村控制武陟流量及发电流量
 
         Args:
             station_name: 站点名称，目前支持"花园口"
@@ -1624,16 +1626,41 @@ def register_forecast_models(mcp: FastMCP):
 
         # 花园口流量控制相关的 Dispatch_Par 参数
         # 每个参数: (stcd, 站点名, 参数含义, 调整方式)
-        #   "target" → 直接设为目标流量
-        #   "buffer" → 设为目标流量 - 1000（留出缓冲余量）
+        #   "target"  → 直接设为目标流量（花园口直接控制参数）
+        #   "buffer"  → 设为目标流量 - 1000（留出缓冲余量）
+        #   "optimize" → 设为优化值（减小水库出库，间接降低花园口流量）
         GARDEN_FLOW_PARAMS = [
+            # 直接控制花园口流量的参数
             (23, "小浪底", "预泄控制花园口流量", "buffer"),
             (30, "小浪底", "保滩流量", "buffer"),
             (38, "花园口", "判别库群退水时刻设置的花园口流量阈值", "target"),
             (39, "花园口", "下大洪水，退水过程控制的花园口流量", "target"),
             (43, "花园口", "判别支流水库关门时刻的花园口流量", "target"),
             (44, "小浪底", "小浪底保滩库容用完后，转控花园口的流量", "buffer"),
+            # 间接影响花园口流量的参数（水库出库/水位控制）
+            (27, "河口村", "花园口12000关门的最高水位", "optimize"),
+            (29, "小浪底", "4500转控10000的判别水位", "optimize"),
+            (31, "小浪底", "发电流量", "optimize"),
+            (32, "陆浑", "20年一遇以下洪水控制流量", "optimize"),
+            (33, "陆浑", "发电流量", "optimize"),
+            (34, "故县", "20年一遇以下洪水控制流量", "optimize"),
+            (35, "故县", "发电流量", "optimize"),
+            (36, "河口村", "254.5m以下控制武陟流量", "optimize"),
+            (37, "河口村", "发电流量", "optimize"),
         ]
+
+        # optimize 类型的优化值映射: stcd → 优化值
+        OPTIMIZE_VALUES = {
+            27: 275,      # 河口村关门水位（常规254.5，优化275）
+            29: 275,      # 小浪底判别水位（常规254，优化275）
+            31: 300,      # 小浪底发电流量（常规1000，优化300）
+            32: 1000,     # 陆浑控制流量（常规1000，优化0-1000，取上限）
+            33: 0,        # 陆浑发电流量（常规77，优化0）
+            34: 1000,     # 故县控制流量（常规1000，优化0-1000，取上限）
+            35: 0,        # 故县发电流量（常规90，优化0）
+            36: 4000,     # 河口村控制武陟流量（常规2000，优化4000）
+            37: 0,        # 河口村发电流量（常规20，优化0）
+        }
 
         if station_name not in ["花园口"]:
             return {
@@ -1651,18 +1678,23 @@ def register_forecast_models(mcp: FastMCP):
             cursor = conn.cursor()
 
             updated = []
-            for stcd, stnm, instruction, adjust_type in GARDEN_FLOW_PARAMS:
-                new_val = max_flow - 1000 if adjust_type == "buffer" else max_flow
+            for stcd_val, stnm, instruction, adjust_type in GARDEN_FLOW_PARAMS:
+                if adjust_type == "buffer":
+                    new_val = max_flow - 1000
+                elif adjust_type == "optimize":
+                    new_val = OPTIMIZE_VALUES.get(stcd_val, max_flow)
+                else:  # target
+                    new_val = max_flow
                 new_val = round(new_val, 2)
 
                 # 查询当前值
                 cursor.execute(
                     "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stcd = ?",
-                    (stcd,)
+                    (stcd_val,)
                 )
                 row = cursor.fetchone()
                 if not row:
-                    logger.warning(f"未找到 stcd={stcd} 的参数")
+                    logger.warning(f"未找到 stcd={stcd_val} 的参数")
                     continue
 
                 old_val = float(row.Control_Par) if row.Control_Par is not None else None
@@ -1671,12 +1703,12 @@ def register_forecast_models(mcp: FastMCP):
 
                 cursor.execute(
                     "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ?",
-                    (new_val, stcd)
+                    (new_val, stcd_val)
                 )
                 conn.commit()
 
                 updated.append({
-                    "stcd": stcd,
+                    "stcd": stcd_val,
                     "stnm": stnm,
                     "instruction": instruction,
                     "old_value": round(old_val, 2) if old_val is not None else None,
