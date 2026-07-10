@@ -15,6 +15,7 @@ from src.utils.logger import get_logger
 from src.services.storage.scheme_storage import save_scheme
 from src.services.external_api.xinanjiang_service import xinanjiang_auth_service, xinanjiang_model_service
 from src.services.external_api.water_forecast_service import water_forecast_service
+from src.services.external_api.hydrology_forecast_service import hydrology_forecast_service
 from src.utils.station_codes import get_reservoir_code, get_hydrology_code
 
 logger = get_logger(__name__)
@@ -32,7 +33,6 @@ def _mdb_execute(cursor, sql: str, params: tuple = None):
             if p is None:
                 escaped_params.append("NULL")
             elif isinstance(p, float):
-                # MDBTools SQL parser doesn't support trailing '.0' on whole floats
                 if p == int(p):
                     escaped_params.append(str(int(p)))
                 else:
@@ -323,23 +323,23 @@ def register_forecast_models(mcp: FastMCP):
 
     @mcp.tool()
     async def generate_dispatch_scheme(
-        _start_time: str = None
+        start_time: str = None,
+        flood_type: str = "下大洪水"
     ) -> dict:
         """
-        一键生成调度方案单：导入Excel → 运行RegualDispacth.exe计算 → 统计处理 → 存储入库 → 返回前台展示数据。
+        一键生成调度方案单：检查数据源 → 运行RegualDispacth.exe计算 → 统计处理 → 存储入库 → 返回前台展示数据。
 
-        从 data/Q_Inputsd.xlsx 和 data/Q_Inputxd.xlsx 读取入库流量数据，
-        导入到 data.mdb 数据库，运行 RegualDispacth.exe 进行计算，
-        读取 Q_Output 和 Z_Output 计算结果进行统计处理后存储到数据库，并返回摘要数据供前台展示。
+        必须先调用 get_hydrology_forecast_data 将水文局预报数据写入数据库，
+        否则返回错误提示引导用户先获取数据。
 
         Args:
-            _start_time: 调度开始时间（格式：YYYY-MM-DD），当前基于Excel数据自动确定时间范围
+            start_time: 调度开始时间（格式：YYYY-MM-DD），当前基于数据自动确定时间范围
+            flood_type: 洪水类型，可选 "上大洪水" 或 "下大洪水"，默认 "下大洪水"
         """
-        logger.info(f"调用 generate_dispatch_scheme，收到参数: _start_time={repr(_start_time)}")
+        logger.info(f"调用 generate_dispatch_scheme，收到参数: start_time={repr(start_time)}，flood_type={repr(flood_type)}")
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
-        data_dir = os.path.join(project_root, 'data')
         exe_path = os.path.join(project_root, 'RegualDispacth.exe')
 
         total_start = time.time()
@@ -348,65 +348,46 @@ def register_forecast_models(mcp: FastMCP):
 
         try:
             # ================================================================
-            # 步骤1: 导入Excel数据到MDB
+            # 步骤1: 检查数据源（必须由 get_hydrology_forecast_data 写入）
             # ================================================================
-            logger.info("步骤1: 导入Excel数据到MDB")
+            logger.info("步骤1: 检查数据源")
             import_start = time.time()
 
-            sd_path = os.path.join(data_dir, 'Q_Inputsd.xlsx')
-            xd_path = os.path.join(data_dir, 'Q_Inputxd.xlsx')
-
-            if not os.path.exists(sd_path):
-                return {"success": False, "error": f"上游入库流量文件不存在: {sd_path}", "steps": steps}
-            if not os.path.exists(xd_path):
-                return {"success": False, "error": f"下游入库流量文件不存在: {xd_path}", "steps": steps}
             if not os.path.exists(exe_path):
                 return {"success": False, "error": f"调度计算程序不存在: {exe_path}", "steps": steps}
             if not os.path.exists(mdb_path):
                 return {"success": False, "error": f"数据库文件不存在: {mdb_path}", "steps": steps}
 
-            df_sd = pd.read_excel(sd_path)
-            df_xd = pd.read_excel(xd_path)
-            
-            # 判断系统自动切换驱动
-            if platform.system() == "Windows":
-                driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
-            else:
-                driver_name = "MDBTools"
-            
-            conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
 
-            # 使用 mdb_clear_table 工具清空表（ODBC 驱动不支持 DELETE）
-            _mdb_clear_table(mdb_path, "Q_Inputsd")
-            _mdb_clear_table(mdb_path, "Q_Inputxd")
-            conn.commit()
+            # 检查 Q_Inputsd 和 Q_Inputxd 是否已有数据
+            cursor.execute("SELECT COUNT(*) FROM Q_Inputsd")
+            sd_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM Q_Inputxd")
+            xd_count = cursor.fetchone()[0]
 
-            # 使用 mdb_insert_rows 工具批量插入数据（ODBC 驱动不支持 INSERT）
-            sd_rows = []
-            for _, row in df_sd.iterrows():
-                sd_rows.append([str(row.get('stcd', '')), str(row.get('stnm', '')),
-                               str(row.get('tm', '')), str(row.get('q', 0))])
-            _mdb_insert_rows(mdb_path, "Q_Inputsd", sd_rows)
-            sd_count = len(sd_rows)
-            sd_rows = None
-
-            xd_rows = []
-            for _, row in df_xd.iterrows():
-                xd_rows.append([str(row.get('stcd', '')), str(row.get('stnm', '')),
-                               str(row.get('tm', '')), str(row.get('q', 0))])
-            _mdb_insert_rows(mdb_path, "Q_Inputxd", xd_rows)
-            xd_count = len(xd_rows)
-            xd_rows = None
+            if sd_count == 0 or xd_count == 0:
+                conn.close()
+                return {
+                    "success": False,
+                    "command": "FUNC_GENERATE_DISPATCH_SCHEME",
+                    "error": "数据库为空，请先获取水文局预报数据",
+                    "hint": "调用 get_hydrology_forecast_plans(date_time) 获取方案列表 → 用户选择方案 → 调用 get_hydrology_forecast_data(plcd, time) 写入数据",
+                    "Q_Inputsd_rows": sd_count,
+                    "Q_Inputxd_rows": xd_count,
+                    "steps": steps
+                }
 
             import_elapsed = round(time.time() - import_start, 2)
-            steps["import"] = {
+            steps["data_check"] = {
+                "source": "dynamic",
                 "Q_Inputsd_rows": sd_count,
                 "Q_Inputxd_rows": xd_count,
                 "elapsed_seconds": import_elapsed
             }
-            logger.info(f"导入完成: Q_Inputsd={sd_count}行, Q_Inputxd={xd_count}行, 耗时{import_elapsed}秒")
+            logger.info(f"数据源检查完成: Q_Inputsd={sd_count}行, Q_Inputxd={xd_count}行, 耗时{import_elapsed}秒")
 
             # ================================================================
             # 步骤2: 运行调度计算程序
@@ -439,10 +420,8 @@ def register_forecast_models(mcp: FastMCP):
             logger.info("步骤3: 读取Q_Output并统计处理")
             stats_start = time.time()
 
-            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output")
+            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output ORDER BY tm, stcd")
             rows = cursor.fetchall()
-            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
-            rows.sort(key=lambda r: (str(r.tm), str(r.stcd)))
 
             output_data = []
             for row in rows:
@@ -491,6 +470,25 @@ def register_forecast_models(mcp: FastMCP):
             reservoir_stats, reservoir_table = _calculate_reservoir_stats(conn)
             logger.info(f"已从 Z_Output 提取 {len(reservoir_stats)} 个水库的统计指标")
 
+            # 水文站统计（从 Q_Output 表计算）
+            hydrologic_stats, hydrologic_table = _calculate_hydrologic_stats(conn, flood_type)
+
+            # 滩区淹没分析（根据花园口洪峰流量）
+            garden_mouth_peak = next((s["peak_flow"] for s in hydrologic_stats if s["station"] == "花园口"), 0)
+            flood_submergence = _calculate_flood_submergence(garden_mouth_peak)
+
+            # 东平湖分洪状态
+            dongpinghu_diversion = _check_dongpinghu_diversion(conn)
+
+            # 自然语言总结
+            natural_language_summary = _generate_natural_language_summary(
+                reservoir_stats=reservoir_stats,
+                hydrologic_stats=hydrologic_stats,
+                flood_submergence=flood_submergence,
+                dongpinghu_diversion=dongpinghu_diversion,
+                flood_type=flood_type
+            )
+
             # 从 Z_Output 读取水库时序数据，转换为 reservoirs 字典格式
             reservoirs = {}
             cursor.execute("SELECT stcd, stnm, tm, Qin, Qout, z, v FROM Z_Output")
@@ -534,7 +532,7 @@ def register_forecast_models(mcp: FastMCP):
 
             scheme_data = {
                 "scheme_name": f"调度方案单_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                "description": "基于Excel入库流量数据，通过RegualDispacth.exe计算生成的调度方案",
+                "description": "基于水文局预报数据，通过RegualDispacth.exe计算生成的调度方案",
                 "basin": "黄河",
                 "start_date": time_range_start[:10] if time_range_start else "",
                 "end_date": time_range_end[:10] if time_range_end else "",
@@ -577,8 +575,14 @@ def register_forecast_models(mcp: FastMCP):
                     ],
                     "all_stations": station_stats,
                     "reservoir_stats": reservoir_stats,
-                    "reservoir_table": reservoir_table
-                }
+                    "reservoir_table": reservoir_table,
+                    "hydrologic_stats": hydrologic_stats,
+                    "hydrologic_table": hydrologic_table,
+                    "flood_submergence": flood_submergence,
+                    "dongpinghu_diversion": dongpinghu_diversion,
+                    "flood_type": flood_type
+                },
+                "natural_language_summary": natural_language_summary
             }
 
             logger.debug(f"generate_dispatch_scheme 返回结果: {return_value}")
@@ -1448,27 +1452,22 @@ def register_forecast_models(mcp: FastMCP):
                 }
 
     @mcp.tool()
-    async def modify_dispatch_param(action: str, station_name: Optional[str] = None, param_desc: Optional[str] = None, new_value: Optional[float] = None) -> dict:
+    async def modify_dispatch_param(action: str, station_name: Optional[str] = None, param_desc: Optional[str] = None, new_value: Optional[float] = None, stcd: Optional[int] = None) -> dict:
         """
         查看或修改 data.mdb 中 Dispatch_Par 表的调度参数。
 
         Args:
             action: 操作类型，"list"（查看所有参数）或 "update"（修改参数）
-            station_name: 站点名称（如"小浪底"、"三门峡"、"陆浑"等），update时必填
-            param_desc: 参数说明关键词（如"敞泄"、"初始水位"、"预泄流量"、"防洪高水位"等），update时必填
+            station_name: 站点名称（如"小浪底"、"三门峡"、"陆浑"等），update时可填
+            param_desc: 参数说明关键词（如"敞泄"、"初始水位"、"预泄流量"、"防洪高水位"等），update时可填
             new_value: 新的参数值，update时必填
+            stcd: 参数编号（直接指定stcd，优先于station_name+param_desc匹配）
         """
-        logger.info(f"调用 modify_dispatch_param，action={action}, station_name={station_name}, param_desc={param_desc}, new_value={new_value}")
+        logger.info(f"调用 modify_dispatch_param，action={action}, station_name={station_name}, param_desc={param_desc}, new_value={new_value}, stcd={stcd}")
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
-        # 判断系统自动切换驱动
-        if platform.system() == "Windows":
-            driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
-        else:
-            driver_name = "MDBTools"
-
-        conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
+        conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
         conn = None
 
         try:
@@ -1476,10 +1475,8 @@ def register_forecast_models(mcp: FastMCP):
             cursor = conn.cursor()
 
             if action == "list":
-                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
+                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par ORDER BY stcd")
                 rows = cursor.fetchall()
-                # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
-                rows.sort(key=lambda r: str(r.stcd))
                 params = []
                 for row in rows:
                     params.append({
@@ -1498,25 +1495,35 @@ def register_forecast_models(mcp: FastMCP):
                 }
 
             elif action == "update":
-                if not station_name or not param_desc or new_value is None:
+                if new_value is None:
                     conn.close()
                     return {
                         "success": False,
-                        "error": "update 操作需要提供 station_name、param_desc 和 new_value 参数"
+                        "error": "update 操作需要提供 new_value 参数"
+                    }
+                if stcd is None and (not station_name or not param_desc):
+                    conn.close()
+                    return {
+                        "success": False,
+                        "error": "update 操作需要提供 stcd 或 (station_name + param_desc) 参数"
                     }
 
-                # MDBTools SQL 解析器不支持 LIKE，先查询全部再用 Python 过滤
-                cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
-                all_rows = cursor.fetchall()
-                matches = [row for row in all_rows
-                          if row.stnm and row.stnm.strip() == station_name
-                          and row.Instruction and param_desc in row.Instruction]
+                # 优先用 stcd 查找
+                if stcd is not None:
+                    cursor.execute(
+                        "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stcd = ?",
+                        (stcd,)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stnm = ? AND Instruction LIKE ?",
+                        (station_name, f'%{param_desc}%')
+                    )
+                matches = cursor.fetchall()
 
                 if len(matches) == 0:
-                    cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par")
+                    cursor.execute("SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par ORDER BY stcd")
                     all_rows = cursor.fetchall()
-                    # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
-                    all_rows.sort(key=lambda r: str(r.stcd))
                     all_params = []
                     for row in all_rows:
                         all_params.append({
@@ -1557,8 +1564,11 @@ def register_forecast_models(mcp: FastMCP):
                         "Instruction": row.Instruction.strip() if row.Instruction else ""
                     }
 
-                    # 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
-                    _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_value, "stcd", row.stcd)
+                    cursor.execute(
+                        "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ? AND stnm = ? AND Instruction = ?",
+                        (new_value, row.stcd, row.stnm, row.Instruction)
+                    )
+                    conn.commit()
 
                     after = {
                         "stcd": row.stcd,
@@ -1633,13 +1643,7 @@ def register_forecast_models(mcp: FastMCP):
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mdb_path = os.path.join(project_root, '6', 'data.mdb')
-        # 判断系统自动切换驱动
-        if platform.system() == "Windows":
-            driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
-        else:
-            driver_name = "MDBTools"
-
-        conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
+        conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
         conn = None
 
         try:
@@ -1652,8 +1656,7 @@ def register_forecast_models(mcp: FastMCP):
                 new_val = round(new_val, 2)
 
                 # 查询当前值
-                _mdb_execute(
-                    cursor,
+                cursor.execute(
                     "SELECT stcd, stnm, Control_Par, Instruction FROM Dispatch_Par WHERE stcd = ?",
                     (stcd,)
                 )
@@ -1666,8 +1669,11 @@ def register_forecast_models(mcp: FastMCP):
                 if old_val is not None and abs(old_val - new_val) < 0.01:
                     continue
 
-                # 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
-                _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_val, "stcd", stcd)
+                cursor.execute(
+                    "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ?",
+                    (new_val, stcd)
+                )
+                conn.commit()
 
                 updated.append({
                     "stcd": stcd,
@@ -1716,12 +1722,155 @@ def register_forecast_models(mcp: FastMCP):
     @mcp.tool()
     async def generate_dispatch_sheet() -> dict:
         """
-        一键生成调度方案单：导入Excel → 运行计算 → 统计处理 → 存储入库 → 返回前台展示数据。
+        一键生成调度方案单：运行计算 → 统计处理 → 存储入库 → 返回前台展示数据。
 
         与 generate_dispatch_scheme 功能一致，为兼容不同调用习惯保留。
         """
         logger.info("调用 generate_dispatch_sheet，委托给 generate_dispatch_scheme")
         return await generate_dispatch_scheme()
+
+    # ================================================================
+    # 水文局动态预报数据工具（Task 2-3）
+    # ================================================================
+
+    @mcp.tool()
+    async def get_hydrology_forecast_plans(date_time: str) -> dict:
+        """
+        根据时间获取水文局预报方案列表。
+
+        调用水文局 API（GET /pre/getSwPreWaterDataList），获取指定日期的所有可用预报方案。
+        用户选择方案后，使用 get_hydrology_forecast_data 获取具体数据。
+
+        Args:
+            date_time: 日期，格式 YYYY-MM-DD，如 "2025-06-16"
+
+        Returns:
+            {
+                "success": true,
+                "date_time": "2025-06-16",
+                "plan_count": 3,
+                "plan_list": [
+                    {"plcd": "7.20暴雨移植-预报", "time": "2025-07-18 08:00:00", "description": "..."},
+                    ...
+                ],
+                "message": "共 3 个预报方案，请选择"
+            }
+        """
+        logger.info(f"调用 get_hydrology_forecast_plans, date_time={date_time}")
+        return hydrology_forecast_service.get_forecast_plans(date_time)
+
+    @mcp.tool()
+    async def get_hydrology_forecast_data(plcd: str, time: str) -> dict:
+        """
+        根据 plcd 和时间获取水文局预报方案数据，并写入 Access 数据库。
+
+        调用水文局 API（GET /pre/getSwPreWaterDataByPlcd），获取方案详细数据，
+        清空 Q_Inputsd 和 Q_Inputxd 表后写入新数据。
+        写入完成后，可直接调用 generate_dispatch_scheme 进行调度计算。
+
+        Args:
+            plcd: 方案代码，如 "7.20暴雨移植-预报"
+            time: 方案时间，如 "2025-07-18 08:00:00"
+
+        Returns:
+            {
+                "success": true,
+                "plcd": "7.20暴雨移植-预报",
+                "time": "2025-07-18 08:00:00",
+                "write_result": {
+                    "upstream_count": 1780,
+                    "downstream_count": 8346,
+                    "total": 10126
+                },
+                "message": "预报数据已写入数据库，可调用 generate_dispatch_scheme 进行调度计算"
+            }
+        """
+        logger.info(f"调用 get_hydrology_forecast_data, plcd={plcd}, time={time}")
+
+        if not plcd or not time:
+            return {
+                "success": False,
+                "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                "error": "plcd 和 time 均为必填参数"
+            }
+
+        # 1. 调用 API 获取数据
+        api_result = hydrology_forecast_service.get_forecast_data(plcd, time)
+        if not api_result.get("success"):
+            return api_result
+
+        api_data = api_result.get("data", [])
+        if not api_data:
+            return {
+                "success": False,
+                "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                "error": "API 返回数据为空",
+                "plcd": plcd,
+                "time": time
+            }
+
+        # 2. 写入 Access 数据库
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        mdb_path = os.path.join(project_root, '6', 'data.mdb')
+
+        if not os.path.exists(mdb_path):
+            return {
+                "success": False,
+                "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                "error": f"数据库文件不存在: {mdb_path}"
+            }
+
+        conn = None
+        try:
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
+            conn = pyodbc.connect(conn_str)
+            cursor = conn.cursor()
+
+            write_result = hydrology_forecast_service.write_to_access_db(api_data, conn, cursor)
+
+            if write_result.get("success"):
+                conn.close()
+                return {
+                    "success": True,
+                    "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                    "plcd": plcd,
+                    "time": time,
+                    "write_result": {
+                        "upstream_count": write_result["upstream_count"],
+                        "downstream_count": write_result["downstream_count"],
+                        "total": write_result["total"],
+                        "errors": write_result.get("errors", [])
+                    },
+                    "message": f"预报数据已写入数据库（上游 {write_result['upstream_count']} 条，下游 {write_result['downstream_count']} 条），可调用 generate_dispatch_scheme 进行调度计算"
+                }
+            else:
+                conn.close()
+                return {
+                    "success": False,
+                    "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                    "error": f"写入数据库失败: {write_result.get('error', '')}",
+                    "write_result": write_result
+                }
+        except pyodbc.Error as e:
+            logger.error(f"get_hydrology_forecast_data 数据库错误: {e}")
+            return {
+                "success": False,
+                "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                "error": f"数据库操作失败: {str(e)}"
+            }
+        except Exception as e:
+            logger.error(f"get_hydrology_forecast_data 出错: {e}")
+            return {
+                "success": False,
+                "command": "FUNC_GET_HYDROLOGY_FORECAST_DATA",
+                "error": f"获取预报数据失败: {str(e)}"
+            }
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     # ================================================================
     # 参数模板工具（Task 1-5）
@@ -1743,10 +1892,8 @@ def register_forecast_models(mcp: FastMCP):
 
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT stcd, stnm, tm, Qin, Qout, z, v FROM Z_Output")
+            cursor.execute("SELECT stcd, stnm, tm, Qin, Qout, z, v FROM Z_Output ORDER BY stcd, tm")
             rows = cursor.fetchall()
-            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
-            rows.sort(key=lambda r: (str(r.stcd), str(r.tm)))
 
             if not rows:
                 logger.warning("Z_Output 表为空，无法提取水库统计指标")
@@ -1807,6 +1954,219 @@ def register_forecast_models(mcp: FastMCP):
         except Exception as e:
             logger.warning(f"从 Z_Output 提取水库统计指标失败: {e}")
             return [], []
+
+    def _calculate_hydrologic_stats(conn, flood_type: str = "下大洪水") -> Tuple[List, List]:
+        """从 Q_Output 表计算各水文站洪峰流量、超万洪量、花园口超4500历时
+        
+        Returns:
+            (hydrologic_stats, hydrologic_table)
+        """
+        # 站点列表
+        if flood_type == "上大洪水":
+            STATIONS = ["花园口", "夹河滩", "高村", "孙口", "艾山", "泺口", "利津"]
+        else:
+            STATIONS = ["白马寺", "龙门镇", "黑石关", "山路平", "武陟", "花园口", "夹河滩", "高村", "孙口", "艾山", "泺口", "利津"]
+        
+        EXCESS_FLOW_STATIONS = ["花园口", "孙口"]  # 需要计算超万洪量的站
+        EXCESS_FLOW_THRESHOLD = 10000.0
+        DURATION_THRESHOLD = 4500.0  # 花园口超4500历时
+        
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output ORDER BY stnm, tm")
+            rows = cursor.fetchall()
+            
+            if not rows:
+                return [], []
+            
+            stats = []
+            for st_name in STATIONS:
+                station_rows = [(r.tm, r.q) for r in rows if (r.stnm.strip() if r.stnm else '') == st_name]
+                if not station_rows:
+                    continue
+                
+                flows = [q for _, q in station_rows]
+                peak_flow = round(max(flows), 2)
+                
+                stat = {"station": st_name, "peak_flow": peak_flow}
+                
+                # 超万洪量
+                if st_name in EXCESS_FLOW_STATIONS:
+                    excess_volume = 0.0
+                    for i in range(1, len(station_rows)):
+                        prev_tm, prev_q = station_rows[i-1]
+                        curr_tm, curr_q = station_rows[i]
+                        if prev_q > EXCESS_FLOW_THRESHOLD or curr_q > EXCESS_FLOW_THRESHOLD:
+                            avg_q = (prev_q + curr_q) / 2
+                            if avg_q > EXCESS_FLOW_THRESHOLD:
+                                delta_hours = (curr_tm - prev_tm).total_seconds() / 3600
+                                if delta_hours <= 0:
+                                    delta_hours = 1
+                                excess_volume += (avg_q - EXCESS_FLOW_THRESHOLD) * delta_hours
+                    stat["excess_volume_10000"] = round(excess_volume / 1e8, 4)
+                
+                # 花园口超4500历时
+                if st_name == "花园口":
+                    duration_count = sum(1 for _, q in station_rows if q > DURATION_THRESHOLD)
+                    stat["excess_duration_4500"] = duration_count
+                
+                stats.append(stat)
+            
+            # 构建特征值表
+            hydrologic_table = []
+            for s in stats:
+                st_label = s["station"] + "站"
+                # 洪峰流量
+                hydrologic_table.append({"name": st_label, "project": "洪峰流量(m³/s)", "value": s["peak_flow"]})
+                # 超万洪量
+                if "excess_volume_10000" in s:
+                    hydrologic_table.append({"name": "", "project": "超万洪量(亿m³)", "value": s["excess_volume_10000"]})
+                # 花园口超4500历时
+                if "excess_duration_4500" in s:
+                    hydrologic_table.append({"name": "", "project": "超4500历时(h)", "value": s["excess_duration_4500"]})
+            
+            return stats, hydrologic_table
+        
+        except Exception as e:
+            logger.warning(f"计算水文站统计失败: {e}")
+            return [], []
+
+    def _calculate_flood_submergence(garden_mouth_peak_flow: float) -> dict:
+        """根据花园口洪峰流量，按分段表线性插值计算滩区淹没
+        
+        分段表数据（河南+山东合并汇总）：
+        - 4000: 不漫滩, 涉及人口=0, 转移人口=0, 淹没面积=0
+        - 6000: 涉及人口=4.54, 转移人口=2.46, 淹没面积=39.07
+        - 8000: 涉及人口=176.69, 转移人口=0, 淹没面积=545.33  (河南两组数据取大值)
+        - 10000: 涉及人口=112.70, 转移人口=0, 淹没面积=323.22
+        - 12370: 涉及人口=31.42, 转移人口=7.44, 淹没面积=228.35
+        - 15700: 涉及人口=159.56, 转移人口=5.70, 淹没面积=546.15
+        - 22000: 涉及人口=182.52, 转移人口=20.09, 淹没面积=710.00
+        """
+        # 分段表：花园口流量 → (涉及人口, 转移人口, 淹没面积)
+        SEGMENTS = [
+            (4000, 0, 0, 0),
+            (6000, 4.54, 2.46, 39.07),
+            (8000, 176.69, 0, 545.33),
+            (10000, 112.70, 0, 323.22),
+            (12370, 31.42, 7.44, 228.35),
+            (15700, 159.56, 5.70, 546.15),
+            (22000, 182.52, 20.09, 710.00),
+        ]
+        
+        q = garden_mouth_peak_flow
+        
+        if q < 4000:
+            return {
+                "garden_mouth_peak": q,
+                "involved_population": 0,
+                "evacuated_population": 0,
+                "submerged_area": 0,
+                "description": "不漫滩"
+            }
+        
+        if q >= 22000:
+            _, pop, evac, area = SEGMENTS[-1]
+            return {
+                "garden_mouth_peak": q,
+                "involved_population": pop,
+                "evacuated_population": evac,
+                "submerged_area": area,
+                "description": "黄河滩区全部漫滩"
+            }
+        
+        # 线性插值
+        for i in range(len(SEGMENTS) - 1):
+            q_low, pop_low, evac_low, area_low = SEGMENTS[i]
+            q_high, pop_high, evac_high, area_high = SEGMENTS[i + 1]
+            if q_low <= q <= q_high:
+                ratio = (q - q_low) / (q_high - q_low) if q_high != q_low else 0
+                pop = round(pop_low + ratio * (pop_high - pop_low), 2)
+                evac = round(evac_low + ratio * (evac_high - evac_low), 2)
+                area = round(area_low + ratio * (area_high - area_low), 2)
+                return {
+                    "garden_mouth_peak": q,
+                    "involved_population": pop,
+                    "evacuated_population": evac,
+                    "submerged_area": area,
+                    "description": f"花园口洪峰{q:.0f}m³/s，滩区漫滩"
+                }
+        
+        return {"garden_mouth_peak": q, "involved_population": 0, "evacuated_population": 0, "submerged_area": 0, "description": "未知"}
+
+    def _check_dongpinghu_diversion(conn) -> dict:
+        """从 Dispatch_Par 表读取东平湖分洪状态（stcd=1）"""
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT Control_Par FROM Dispatch_Par WHERE stcd = 1")
+            row = cursor.fetchone()
+            if row and row.Control_Par == 1:
+                return {"enabled": True, "max_flow": 3600, "volume": 9.79}
+            return {"enabled": False}
+        except Exception as e:
+            logger.warning(f"读取东平湖分洪状态失败: {e}")
+            return {"enabled": False}
+
+    def _generate_natural_language_summary(
+        reservoir_stats: List,
+        hydrologic_stats: List,
+        flood_submergence: dict,
+        dongpinghu_diversion: dict,
+        flood_type: str
+    ) -> str:
+        """根据所有计算结果生成格式化自然语言总结"""
+        lines = []
+        
+        # 水库部分
+        res_map = {s["reservoir"]: s for s in reservoir_stats}
+        
+        for rname in ["三门峡", "小浪底", "陆浑", "故县", "河口村"]:
+            if rname not in res_map:
+                continue
+            r = res_map[rname]
+            water_level = r["max_water_level"]
+            if rname == "三门峡":
+                lines.append(f"按照常规方案调算，{rname}水库最高水位{water_level}米。")
+            elif rname == "小浪底":
+                lines.append(f"{rname}水库最高水位{water_level}米。")
+            elif rname == "陆浑":
+                lines.append(f"支流{rname}水库最高水位{water_level}米。")
+            elif rname == "故县":
+                lines.append(f"{rname}水库最高水位{water_level}米，不涉及人口转移。")
+            elif rname == "河口村":
+                lines.append(f"{rname}水库最高水位{water_level}米。")
+        
+        lines.append("")
+        
+        # 水文站部分
+        hydro_map = {s["station"]: s for s in hydrologic_stats}
+        
+        garden_peak = hydro_map.get("花园口", {}).get("peak_flow", 0)
+        garden_excess = hydro_map.get("花园口", {}).get("excess_volume_10000", 0)
+        sunk_peak = hydro_map.get("孙口", {}).get("peak_flow", 0)
+        sunk_excess = hydro_map.get("孙口", {}).get("excess_volume_10000", 0)
+        
+        lines.append(f"通过几个水库调蓄，花园口洪峰{garden_peak:.0f}立方米每秒，超万洪量{garden_excess:.2f}亿立方米。")
+        
+        # 漫滩预估
+        if flood_submergence.get("description") == "不漫滩":
+            lines.append("下游滩区不会漫滩。")
+        else:
+            lines.append(f"预估下游滩区发生漫滩，涉及人口{flood_submergence.get('involved_population', 0):.2f}万人，需转移安置{flood_submergence.get('evacuated_population', 0):.2f}万人。")
+        
+        lines.append(f"孙口站洪峰流量{sunk_peak:.0f}立方米每秒，超万洪量{sunk_excess:.2f}亿立方米。")
+        
+        # 东平湖分洪
+        if dongpinghu_diversion.get("enabled"):
+            max_flow = dongpinghu_diversion.get('max_flow', 0)
+            volume = dongpinghu_diversion.get('volume', 0)
+            if volume > 7.99 or max_flow > 3500:
+                lake_desc = "需要同时启用老湖区和新湖区"
+            else:
+                lake_desc = "只需启用新湖区"
+            lines.append(f"需要启用东平湖滞洪区分洪，东平湖最大分洪流量{max_flow}立方米每秒，分滞洪量{volume}亿立方米，{lake_desc}。")
+        
+        return "\n".join(lines)
 
     def _scan_templates() -> dict:
         """扫描 Parameter_template 目录，返回模板名称→文件路径的映射
@@ -2034,22 +2394,13 @@ def register_forecast_models(mcp: FastMCP):
             if not os.path.exists(mdb_path):
                 return {"success": False, "error": f"数据库文件不存在: {mdb_path}"}
 
-            # 判断系统自动切换驱动
-            if platform.system() == "Windows":
-                driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
-            else:
-                driver_name = "MDBTools"
-
-            conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
 
             # 读取修改前的值用于对比
-            cursor.execute("SELECT stcd, Control_Par FROM Dispatch_Par")
-            rows = cursor.fetchall()
-            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
-            rows.sort(key=lambda r: str(r.stcd))
-            before_map = {row.stcd: row.Control_Par for row in rows}
+            cursor.execute("SELECT stcd, Control_Par FROM Dispatch_Par ORDER BY stcd")
+            before_map = {row.stcd: row.Control_Par for row in cursor.fetchall()}
 
             updated_params = []
             update_count = 0
@@ -2058,11 +2409,14 @@ def register_forecast_models(mcp: FastMCP):
                 new_value = row.get('Control_Par', 0)
                 if stcd == '':
                     continue
-                # 使用 mdb_update 工具直接写入 MDB 文件（ODBC 驱动不支持 UPDATE）
-                _mdb_update_field(mdb_path, "Dispatch_Par", "Control_Par", new_value, "stcd", int(stcd))
-                update_count += 1
-                old_value = before_map.get(int(stcd), None)
-                if old_value != new_value:
+                cursor.execute(
+                    "UPDATE Dispatch_Par SET Control_Par = ? WHERE stcd = ?",
+                    (new_value, stcd)
+                )
+                if cursor.rowcount > 0:
+                    update_count += 1
+                    old_value = before_map.get(stcd, None)
+                    if old_value != new_value:
                         updated_params.append({
                             "stcd": stcd,
                             "stnm": str(row.get('stnm', '')).strip(),
@@ -2162,20 +2516,12 @@ def register_forecast_models(mcp: FastMCP):
             # 3. 读取 Q_Output 实际结果
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             mdb_path = os.path.join(project_root, '6', 'data.mdb')
-            # 判断系统自动切换驱动
-            if platform.system() == "Windows":
-                driver_name = "Microsoft Access Driver (*.mdb, *.accdb)"
-            else:
-                driver_name = "MDBTools"
-
-            conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
 
-            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output")
+            cursor.execute("SELECT stcd, stnm, tm, q FROM Q_Output ORDER BY tm, stcd")
             actual_rows = cursor.fetchall()
-            # MDBTools SQL 解析器不支持 ORDER BY，在 Python 中排序
-            actual_rows.sort(key=lambda r: (str(r.tm), str(r.stcd)))
             conn.close()
 
             # 构建实际数据索引: {(stnm, tm_str): q}
