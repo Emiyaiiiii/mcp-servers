@@ -1421,7 +1421,7 @@ def register_forecast_models(mcp: FastMCP):
                 "message": f"已调整 {len(updated)} 条 Dispatch_Par 参数，控制 {station_name} 流量不超过 {max_flow} m³/s",
                 "updated_count": len(updated),
                 "updated_params": updated,
-                "hint": "参数已更新，请调用 generate_dispatch_sheet() 重新生成方案单验证效果"
+                "hint": "参数已更新，请调用 generate_dispatch_scheme() 重新生成方案单验证效果"
             }
 
         except pyodbc.Error as e:
@@ -1437,15 +1437,6 @@ def register_forecast_models(mcp: FastMCP):
                 except Exception:
                     pass
 
-    @mcp.tool()
-    async def generate_dispatch_sheet() -> dict:
-        """
-        一键生成调度方案单：运行计算 → 统计处理 → 存储入库 → 返回前台展示数据。
-
-        与 generate_dispatch_scheme 功能一致，为兼容不同调用习惯保留。
-        """
-        logger.info("调用 generate_dispatch_sheet，委托给 generate_dispatch_scheme")
-        return await generate_dispatch_scheme()
 
     # ================================================================
     # 水文局动态预报数据工具（Task 2-3）

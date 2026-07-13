@@ -162,7 +162,7 @@ docker-compose logs -f   # 查看日志
 - `run_rainfall_forecast_model` — 降雨预报模型
 - `run_water_forecast_model` — 来水预报模型（对接设计院 API）
 - `rainfall_similarity_analysis` — 降雨图斑相似性分析（三步流程）
-- `generate_dispatch_sheet` — 调度方案生成辅助入口
+- `generate_dispatch_scheme` — 调度方案生成辅助入口
 
 ## 工具列表
 
@@ -183,7 +183,6 @@ docker-compose logs -f   # 查看日志
 - `run_rainfall_forecast_model` — 执行降雨预报模型
 - `run_water_forecast_model` — 执行来水预报模型
 - `generate_dispatch_scheme` — 一键生成调度方案单
-- `generate_dispatch_sheet` — 调度方案生成（别名入口）
 - `run_xinanjiang_model` — 运行新安江水文模型
 - `rainfall_similarity_analysis` — 降雨图斑相似性分析
 - `modify_dispatch_param` — 查看/修改调度参数
