@@ -607,43 +607,7 @@ CREATE TABLE IF NOT EXISTS flood_contact_phones (
 CREATE INDEX IF NOT EXISTS idx_flood_contact_phones_reservoir ON flood_contact_phones(reservoir_code);
 
 -- ============================================
--- 8. 调度方案时间序列数据表
--- ============================================
-
--- 调度方案基础信息表
-CREATE TABLE IF NOT EXISTS dispatch_schemes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    scheme_name VARCHAR(200),
-    scheme_date DATE,
-    data_source VARCHAR(200),
-    row_count INTEGER,
-    column_count INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_dispatch_schemes_date ON dispatch_schemes(scheme_date);
-
--- 调度方案时间序列表
-CREATE TABLE IF NOT EXISTS dispatch_timeseries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    scheme_id INTEGER NOT NULL,
-    timestamp DATETIME NOT NULL,
-    station_code VARCHAR(50) NOT NULL,
-    station_name VARCHAR(100) NOT NULL,
-    metric_type VARCHAR(50) NOT NULL,
-    metric_value DECIMAL(15,4),
-    unit VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (scheme_id) REFERENCES dispatch_schemes(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_scheme ON dispatch_timeseries(scheme_id);
-CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_station ON dispatch_timeseries(station_code);
-CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_timestamp ON dispatch_timeseries(timestamp);
-CREATE INDEX IF NOT EXISTS idx_dispatch_timeseries_metric ON dispatch_timeseries(metric_type);
-
--- ============================================
--- 9. 转移路线坐标表
+-- 8. 转移路线坐标表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS evacuation_routes (

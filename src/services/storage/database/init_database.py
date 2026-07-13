@@ -94,7 +94,6 @@ def init_database(force: bool = False):
         "03_seed_water_levels.sql",
         "04_seed_simulation_params.sql",
         "05_seed_flood_plan.sql",
-        "06_seed_dispatch_schemes.sql",
         "07_seed_evacuation_data.sql",
         "07_seed_xinanjiang_config.sql",
         "08_create_rainfall_tables.sql",
