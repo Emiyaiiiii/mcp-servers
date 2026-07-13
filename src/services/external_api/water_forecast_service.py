@@ -5,6 +5,7 @@ import json
 import os
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from src.config.settings import settings
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,10 +18,10 @@ class WaterForecastAuthService:
         self._token: Optional[str] = None
         self._token_expiry: float = 0
         self._lock = threading.Lock()
-        self._base_url = 'http://10.4.158.37:11111'
-        self._username = 'yh'
-        self._password = 'Yrec!@#2025'
-        self._client_id = 'e5cd7e4891bf95d1d19206ce24a7b32e'
+        self._base_url = settings.WATER_FORECAST_API_BASE_URL
+        self._username = settings.WATER_FORECAST_API_USERNAME
+        self._password = settings.WATER_FORECAST_API_PASSWORD
+        self._client_id = settings.WATER_FORECAST_API_CLIENT_ID
         self._session = requests.Session()
         # 禁用SSL证书验证
         self._session.verify = False
@@ -173,7 +174,7 @@ class WaterForecastService:
     """来水预报服务"""
     
     def __init__(self):
-        self._base_url = 'http://10.4.158.37:11111'
+        self._base_url = settings.WATER_FORECAST_API_BASE_URL
         self._session = requests.Session()
         # 禁用SSL证书验证
         self._session.verify = False

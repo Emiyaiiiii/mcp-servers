@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Tuple
 from fastmcp import FastMCP
 from src.config.settings import settings
 from src.utils.station_codes import get_reservoir_code, get_station_code, get_reservoir_station_code
-from src.services.external_api.auth_service import auth_service
+from src.services.external_api.data_api_auth_service import data_api_auth_service
 from src.services.communication.command_sender import command_sender
 from src.utils.response_helper import success_response
 from src.utils.logger import get_logger
@@ -310,7 +310,7 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
     """发送GET请求，支持token认证和自动刷新"""
     try:
         session = _get_session()
-        headers = auth_service.get_auth_headers()
+        headers = data_api_auth_service.get_auth_headers()
         
         # 诊断：记录是否有 Authorization 头及其前20位
         auth_val = headers.get("Authorization", "")
@@ -324,8 +324,8 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
         # 处理401未授权错误，尝试刷新token后重试
         if response.status_code == 401 and retry_with_auth:
             logger.warning("Token过期或无效，正在重新登录...")
-            auth_service.clear_token()
-            headers = auth_service.get_auth_headers()
+            data_api_auth_service.clear_token()
+            headers = data_api_auth_service.get_auth_headers()
             if headers:
                 logger.info("_get 使用新token重试请求")
                 response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
@@ -337,8 +337,8 @@ def _get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: bool =
         # 检查业务层面的认证错误
         if result.get("code") == 401 and retry_with_auth:
             logger.warning("API返回认证错误，正在重新登录...")
-            auth_service.clear_token()
-            headers = auth_service.get_auth_headers()
+            data_api_auth_service.clear_token()
+            headers = data_api_auth_service.get_auth_headers()
             if headers:
                 logger.info("_get 使用新token重试请求(业务层)")
                 response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)

@@ -10,20 +10,20 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class AuthService:
+class DataApiAuthService:
     """数据API认证服务，管理token的获取和刷新"""
 
     def __init__(self):
         self._token: Optional[str] = None
         self._token_expiry: float = 0
         self._lock = threading.Lock()
-        self._base_url = getattr(settings, 'DATA_API_BASE_URL', 'http://wt.hxyai.cn/fx')
-        self._access_key = getattr(settings, 'DATA_API_ACCESS_KEY', 'yhllm')
-        self._secret_key = getattr(settings, 'DATA_API_SECRETKEY', '5f75d154f9cc50ad0ad8790d0a7f5301')
+        self._base_url = settings.DATA_API_BASE_URL
+        self._access_key = settings.DATA_API_ACCESS_KEY
+        self._secret_key = settings.DATA_API_SECRETKEY
         self._session = requests.Session()
         
         # Token持久化文件路径
-        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.auth_token.json')
+        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.data_api_token.json')
         
         # 初始化时尝试从文件加载token
         self._load_token_from_file()
@@ -153,5 +153,5 @@ class AuthService:
         return {}
 
 
-# 全局认证服务实例
-auth_service = AuthService()
+# 全局数据API认证服务实例
+data_api_auth_service = DataApiAuthService()

@@ -17,6 +17,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 import requests
+from src.config.settings import settings
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -31,13 +32,10 @@ class HydrologyForecastAuthService:
         self._token: Optional[str] = None
         self._token_expiry: float = 0
         self._lock = threading.Lock()
-        self._base_url = os.getenv(
-            'HYDROLOGY_API_BASE_URL',
-            'http://10.4.158.35:8091'
-        )
-        self._username = 'yh'
-        self._password = 'Ylhfxsy@2026!@#'
-        self._client_id = 'e5cd7e4891bf95d1d19206ce24a7b32e'
+        self._base_url = settings.HYDROLOGY_API_BASE_URL
+        self._username = settings.HYDROLOGY_API_USERNAME
+        self._password = settings.HYDROLOGY_API_PASSWORD
+        self._client_id = settings.HYDROLOGY_API_CLIENT_ID
         self._session = requests.Session()
         self._session.verify = False
         
@@ -213,10 +211,7 @@ class HydrologyForecastService:
     """水文局预报数据 API 服务"""
 
     def __init__(self):
-        self._base_url = os.getenv(
-            'HYDROLOGY_API_BASE_URL',
-            'http://10.4.158.35:8091'
-        )
+        self._base_url = settings.HYDROLOGY_API_BASE_URL
 
     def _get_headers(self) -> Dict[str, str]:
         token = hydrology_forecast_auth_service.get_token()

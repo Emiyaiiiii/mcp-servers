@@ -15,7 +15,7 @@ from src.services.communication import (
 
 # 外部 API 服务
 from src.services.external_api import (
-    auth_service,
+    data_api_auth_service,
     water_forecast_auth_service,
     water_forecast_service,
     enhanced_search_auth_service,
@@ -41,7 +41,7 @@ __all__ = [
     'message_queue',
     'command_sender',
     # 外部 API 服务
-    'auth_service',
+    'data_api_auth_service',
     'water_forecast_auth_service',
     'water_forecast_service',
     'enhanced_search_auth_service',

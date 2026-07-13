@@ -1,14 +1,14 @@
 """外部 API 服务模块
 
 提供与外部系统交互的认证和服务：
-- 数据 API (auth_service)
+- 数据 API (data_api_auth_service)
 - 来水预报 API (water_forecast_service)
 - 增强搜索 API (enhanced_search_service)
 - 新安江模型 API (xinanjiang_service)
 - 水文局预报 API (hydrology_forecast_service)
 """
 
-from src.services.external_api.auth_service import auth_service, AuthService
+from src.services.external_api.data_api_auth_service import data_api_auth_service, DataApiAuthService
 from src.services.external_api.water_forecast_service import (
     water_forecast_auth_service,
     WaterForecastAuthService,
@@ -34,8 +34,8 @@ from src.services.external_api.hydrology_forecast_service import (
 
 __all__ = [
     # 数据 API
-    'auth_service',
-    'AuthService',
+    'data_api_auth_service',
+    'DataApiAuthService',
     # 来水预报 API
     'water_forecast_auth_service',
     'WaterForecastAuthService',

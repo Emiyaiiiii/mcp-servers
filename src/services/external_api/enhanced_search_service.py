@@ -4,6 +4,7 @@ import threading
 import json
 import os
 from typing import Optional, Dict, Any
+from src.config.settings import settings
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,9 +17,9 @@ class EnhancedSearchAuthService:
         self._token: Optional[str] = None
         self._token_expiry: float = 0
         self._lock = threading.Lock()
-        self._base_url = 'https://10.4.158.43:18888'
-        self._username = '4055036'
-        self._password = '20221qaz@WSX'
+        self._base_url = settings.ENHANCED_SEARCH_API_BASE_URL
+        self._username = settings.ENHANCED_SEARCH_API_USERNAME
+        self._password = settings.ENHANCED_SEARCH_API_PASSWORD
         self._session = requests.Session()
         # 禁用SSL证书验证
         self._session.verify = False
@@ -149,7 +150,7 @@ class EnhancedSearchService:
     """增强搜索服务"""
     
     def __init__(self):
-        self._base_url = 'https://10.4.158.43:18888'
+        self._base_url = settings.ENHANCED_SEARCH_API_BASE_URL
         self._session = requests.Session()
         # 禁用SSL证书验证
         self._session.verify = False

@@ -3,13 +3,10 @@ import time
 import threading
 import json
 import os
-from pathlib import Path
 from typing import Optional, Dict, Any
-from dotenv import load_dotenv
+from src.config.settings import settings
 from src.utils.logger import get_logger
 
-env_path = Path(__file__).parent.parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
 logger = get_logger(__name__)
 
 
@@ -20,9 +17,9 @@ class XinanjiangAuthService:
         self._token: Optional[str] = None
         self._token_expiry: float = 0
         self._lock = threading.Lock()
-        self._base_url = os.getenv('XINANJIANG_API_BASE_URL', 'http://gateway.yrihr.com')
-        self._app_key = os.getenv('XINANJIANG_APP_KEY', 'mcp-app-nwryet8fz86wv7qnfdym')
-        self._app_secret = os.getenv('XINANJIANG_APP_SECRET', '7p899yn2gxf9dx9t430uqy1xwtkgo9p06o1h7quh7nm36wg8lj')
+        self._base_url = settings.XINANJIANG_API_BASE_URL
+        self._app_key = settings.XINANJIANG_APP_KEY
+        self._app_secret = settings.XINANJIANG_APP_SECRET
         self._session = requests.Session()
         
         self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.xinanjiang_token.json')
@@ -148,7 +145,7 @@ class XinanjiangModelService:
     """新安江模型服务"""
     
     def __init__(self):
-        self._base_url = os.getenv('XINANJIANG_API_BASE_URL', 'http://gateway.yrihr.com')
+        self._base_url = settings.XINANJIANG_API_BASE_URL
         self._session = requests.Session()
     
     def write_service_nc_file(self, control_params: Dict[str, Any], rainfall_data: Dict[str, Any], etp_data: Dict[str, Any]) -> Dict[str, Any]:
