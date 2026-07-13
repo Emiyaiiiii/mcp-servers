@@ -38,35 +38,6 @@ _get_overall_emergency_response = get_yellow_river_emergency_response_core
 def register_plan_tools(mcp: FastMCP):
 
     @mcp.tool()
-    async def list_plan_templates() -> dict:
-        """
-        列出所有可用的预案模板。
-
-        Returns:
-            模板列表，每个模板包含name和description
-        """
-        logger.info(f"调用 list_plan_templates，收到参数: (无)")
-        try:
-            templates = []
-            descriptions = {
-                "flood_control.md": "防洪应急预案模板",
-                "reservoir_dispatch.md": "水库调度方案模板"
-            }
-            for f in os.listdir(TEMPLATE_DIR):
-                if f.endswith(('.md', '.j2', '.jinja')):
-                    templates.append({
-                        "name": f,
-                        "description": descriptions.get(f, "预案模板")
-                    })
-            return_value = {"templates": templates}
-            logger.debug(f"list_plan_templates 返回结果: {return_value}")
-            return return_value
-        except Exception as e:
-            return_value = {"error": f"获取模板列表时出错: {str(e)}"}
-            logger.debug(f"list_plan_templates 返回结果: {return_value}")
-            return return_value
-
-    @mcp.tool()
     async def load_plan_template(generation_time: str, scheme_id: str = None) -> str:
         """
         自动查询数据并生成完整的洪水调度预案。

@@ -11,21 +11,29 @@ mcp-servers/
 │   ├── config/
 │   │   ├── config.yaml             # 水库静态配置
 │   │   ├── config.py               # 配置加载器
-│   │   └── settings.py             # 环境变量配置
+│   │   └── settings.py             # 环境变量配置（统一管理所有服务配置）
 │   ├── services/
 │   │   ├── communication/          # 通信服务
 │   │   │   ├── command_sender.py
 │   │   │   ├── message_queue.py
+│   │   │   ├── session_context.py
+│   │   │   ├── session_middleware.py
 │   │   │   └── websocket_manager.py
 │   │   ├── external_api/           # 外部 API 服务
-│   │   │   ├── auth_service.py
-│   │   │   ├── water_forecast_service.py
+│   │   │   ├── data_api_auth_service.py  # 数据 API 认证服务
 │   │   │   ├── enhanced_search_service.py
+│   │   │   ├── hydrology_forecast_service.py  # 水文局预报服务
+│   │   │   ├── water_forecast_service.py
 │   │   │   └── xinanjiang_service.py
 │   │   └── storage/                # 存储服务
 │   │       ├── scheme_storage.py
 │   │       └── database/
-│   ├── tools/
+│   │           ├── connection.py
+│   │           ├── config_loader.py
+│   │           ├── data_access.py
+│   │           ├── init_database.py
+│   │           └── xinanjiang_config_access.py
+│   ├── tools/                      # MCP 工具定义（仅保留工具关键部分）
 │   │   ├── forecast_models.py      # 预报模型工具（核心，11 个工具）
 │   │   ├── warning_tools.py        # 预警工具
 │   │   ├── simulation_tools.py     # 预演工具
@@ -33,10 +41,20 @@ mcp-servers/
 │   │   ├── data_api_tools.py       # 数据 API 工具
 │   │   ├── reservoir_dispatch.py   # 水库调度工具
 │   │   └── ui_tools.py             # UI 工具
-│   └── utils/
+│   └── utils/                      # 工具函数（按业务分类，便于复用）
 │       ├── logger.py               # 日志工具
 │       ├── response_helper.py      # 响应辅助
-│       └── station_codes.py        # 站点编码映射
+│       ├── station_codes.py        # 站点编码映射
+│       ├── date_utils.py           # 时间格式化工具
+│       ├── data_api_utils.py       # 数据 API 请求辅助
+│       ├── reservoir_utils.py      # 水库水位判断和告警
+│       ├── mdb_utils.py            # MDB 数据库操作工具
+│       ├── dispatch_utils.py       # 调度方案生成核心逻辑
+│       ├── flood_utils.py          # 淹没分析和风险评估
+│       ├── stats_utils.py          # 统计计算
+│       ├── xinanjiang_utils.py     # 新安江模型辅助函数
+│       ├── warning_utils.py        # 预警等级判断
+│       └── template_utils.py       # 参数模板扫描和自然语言总结
 ├── 6/
 │   └── data.mdb                    # Access 数据库（调度参数、计算结果）
 ├── Parameter_template/             # 参数模板文件（只读，不可修改）
@@ -49,11 +67,13 @@ mcp-servers/
 │       └── 方案二：演练洪水-优化调度....xlsx
 ├── data/                           # Excel 入库流量数据
 │   ├── Q_Inputsd.xlsx              # 上游入库流量
-│   └── Q_Inputxd.xlsx              # 下游入库流量
+│   ├── Q_Inputxd.xlsx              # 下游入库流量
+│   └── 水文站.txt                  # 水文站数据
 ├── RegualDispacth.exe              # 调度计算程序
 ├── skills/                         # Skill 文件（供智能体框架使用）
 │   └── custom/
 │       ├── flood-control-mcp/SKILL.md    # 防洪 MCP 使用指南
+│       ├── flood-four-pre/SKILL.md       # 防洪四预工作流
 │       └── schedule-dispatch/SKILL.md    # 调度方案生成指南
 ├── test/                           # 测试文件
 │   ├── mcp_full_system_test.py     # 全功能系统测试
@@ -61,6 +81,7 @@ mcp-servers/
 │   └── test_parameter_templates.py # 参数模板测试
 ├── sql/                            # SQLite 初始化脚本
 ├── frontend/                       # 前端页面
+├── .env                            # 环境变量配置文件
 ├── pyproject.toml
 ├── mcp-config.json                 # MCP 客户端配置
 └── uv.lock
@@ -192,6 +213,24 @@ docker-compose logs -f   # 查看日志
 - `apply_parameter_template` — 应用参数模板
 - `verify_dispatch_result` — 验证调度结果
 
+## 工具函数分类
+
+`src/utils/` 目录下按业务功能分类的工具函数，便于代码复用和维护：
+
+| 模块 | 功能 | 关键函数 |
+|------|------|---------|
+| `date_utils.py` | 时间格式化 | `format_timestamp`, `format_date_fields` |
+| `data_api_utils.py` | 数据 API 请求 | `api_get`, `api_post`, `get_session` |
+| `reservoir_utils.py` | 水库水位判断 | `judge_water_level_warning`, `add_water_level_description` |
+| `mdb_utils.py` | MDB 数据库操作 | `mdb_execute`, `mdb_update_field`, `mdb_insert_rows` |
+| `dispatch_utils.py` | 调度方案生成 | `generate_xiaolangdi_scheme_core`, `generate_sanmenxia_scheme_core` |
+| `flood_utils.py` | 淹没分析 | `calculate_flood_submergence`, `check_dongpinghu_diversion` |
+| `stats_utils.py` | 统计计算 | `calculate_reservoir_stats`, `calculate_hydrologic_stats` |
+| `xinanjiang_utils.py` | 新安江模型辅助 | `build_control_params`, `build_rainfall_array` |
+| `warning_utils.py` | 预警等级判断 | `get_xiaolangdi_warning_core`, `get_yellow_river_emergency_response_core` |
+| `template_utils.py` | 模板处理 | `scan_templates`, `generate_natural_language_summary` |
+| `station_codes.py` | 站点编码映射 | `get_reservoir_code`, `get_hydrology_code` |
+
 ## 数据库
 
 ### Access 数据库 (`6/data.mdb`)
@@ -210,26 +249,6 @@ docker-compose logs -f   # 查看日志
 
 存储系统配置、方案数据、历史记录等。
 
-## 环境变量
-
-```bash
-# MCP 服务配置
-MCP_SERVER_NAME=FloodControlMCP
-
-# 数据 API 配置
-DATA_API_BASE_URL=http://wt.hxyai.cn/fx
-DATA_API_ACCESS_KEY=yhllm
-DATA_API_SECRET_KEY=5f75d154f9cc50ad0ad8790d0a7f5301
-
-# 新安江模型 API
-XINANJIANG_API_BASE_URL=http://gateway.yrihr.com
-
-# WebSocket 配置
-SCENE_WS_BASE_URL=ws://localhost:8889
-
-# 日志配置
-LOG_LEVEL=INFO
-```
 
 ## Skill 文件
 
@@ -238,6 +257,7 @@ LOG_LEVEL=INFO
 | Skill | 路径 | 说明 |
 |-------|------|------|
 | FloodControlMCP | `skills/custom/flood-control-mcp/SKILL.md` | 完整 MCP 工具使用指南（74 个工具） |
+| FloodFourPre | `skills/custom/flood-four-pre/SKILL.md` | 防洪四预工作流（预报→预警→预演→预案） |
 | ScheduleDispatch | `skills/custom/schedule-dispatch/SKILL.md` | 调度方案生成工作流 |
 
 ## 架构
@@ -247,7 +267,7 @@ Agent ←→ MCP (FastMCP, HTTP/8082)
            ├── Access 数据库 (data.mdb)
            ├── RegualDispacth.exe (调度计算)
            ├── SQLite 数据库 (flood_control.db)
-           ├── 外部 API (数据/新安江/图斑分析)
+           ├── 外部 API (数据/新安江/图斑分析/水文预报/来水预报)
            └── WebSocket → UE 场景
 ```
 
@@ -273,3 +293,5 @@ uv run python test/clear_and_test.py
 2. **需要 Access 数据库驱动**：Windows 系统需安装 Microsoft Access Database Engine
 3. **RegualDispacth.exe**：需放置在项目根目录下
 4. **编码问题**：Windows 系统建议设置 `PYTHONUTF8=1` 环境变量避免编码错误
+5. **配置管理**：所有服务配置统一通过 `.env` 文件管理，由 `settings.py` 提供访问接口
+6. **工具函数抽取**：tools 文件仅保留工具定义和业务流程编排，通用逻辑抽取到 `src/utils/` 目录
