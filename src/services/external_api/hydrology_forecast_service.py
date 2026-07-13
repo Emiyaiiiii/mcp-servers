@@ -10,13 +10,143 @@
 
 import os
 import json
+import time
 import platform
 import subprocess
+import threading
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 import requests
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# ============================================================
+# 水文局预报API认证服务
+# ============================================================
+class HydrologyForecastAuthService:
+    """水文局预报API认证服务，管理token的获取和刷新"""
+
+    def __init__(self):
+        self._token: Optional[str] = None
+        self._token_expiry: float = 0
+        self._lock = threading.Lock()
+        self._base_url = os.getenv(
+            'HYDROLOGY_API_BASE_URL',
+            'http://10.4.158.35:8091'
+        )
+        self._username = 'yh'
+        self._password = 'Ylhfxsy@2026!@#'
+        self._client_id = 'e5cd7e4891bf95d1d19206ce24a7b32e'
+        self._session = requests.Session()
+        self._session.verify = False
+        
+        self._token_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', '.hydrology_forecast_token.json')
+        
+        self._load_token_from_file()
+
+    def _save_token_to_file(self):
+        try:
+            token_data = {
+                'token': self._token,
+                'expiry': self._token_expiry
+            }
+            
+            token_dir = os.path.dirname(self._token_file)
+            os.makedirs(token_dir, exist_ok=True)
+            
+            with open(self._token_file, 'w', encoding='utf-8') as f:
+                json.dump(token_data, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"水文局预报token已保存到文件: {self._token_file}")
+        except Exception as e:
+            logger.error(f"保存水文局预报token到文件失败: {e}")
+
+    def _load_token_from_file(self):
+        try:
+            if os.path.exists(self._token_file):
+                with open(self._token_file, 'r', encoding='utf-8') as f:
+                    token_data = json.load(f)
+                
+                token = token_data.get('token')
+                expiry = token_data.get('expiry', 0)
+                
+                if token and time.time() < expiry:
+                    self._token = token
+                    self._token_expiry = expiry
+                    logger.info(f"已从文件加载有效水文局预报token，过期时间: {time.ctime(expiry)}")
+                else:
+                    logger.info("文件中的水文局预报token已过期或无效")
+            else:
+                logger.info("水文局预报token文件不存在，需要重新登录")
+        except Exception as e:
+            logger.error(f"从文件加载水文局预报token失败: {e}")
+
+    def _login(self) -> bool:
+        try:
+            url = f"{self._base_url}/auth/login"
+            
+            end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            start_time = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+            
+            headers = {
+                "Content-Type": "application/json",
+                "ClientId": self._client_id,
+                "Start-Time": start_time,
+                "End-Time": end_time
+            }
+            
+            data = {
+                "username": self._username,
+                "password": self._password,
+                "clientId": self._client_id,
+                "grantType": "password"
+            }
+
+            logger.info(f"正在登录水文局预报API: {url}")
+            response = self._session.post(url, json=data, headers=headers, timeout=30)
+            
+            logger.info(f"登录响应状态码: {response.status_code}")
+            logger.info(f"登录响应内容: {response.text}")
+            
+            response.raise_for_status()
+
+            result = response.json()
+            token = result.get("accessToken") or result.get("token") or result.get("access_token") or result.get("data", {}).get("access_token")
+            if token:
+                self._token = token
+                self._token_expiry = time.time() + 3600 - 60
+                logger.info(f"水文局预报API登录成功，token有效期: 1小时")
+                
+                self._save_token_to_file()
+                
+                return True
+            else:
+                logger.error(f"水文局预报登录失败: 未找到token字段，完整响应: {result}")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"水文局预报登录请求异常: {e}")
+            return False
+
+    def get_token(self) -> Optional[str]:
+        with self._lock:
+            if self._token and time.time() < self._token_expiry:
+                return self._token
+
+            if self._login():
+                return self._token
+            return None
+
+    def is_authenticated(self) -> bool:
+        return self.get_token() is not None
+
+    def clear_token(self):
+        with self._lock:
+            self._token = None
+            self._token_expiry = 0
+
+hydrology_forecast_auth_service = HydrologyForecastAuthService()
 
 # ============================================================
 # API 字段名 → 旧数据 stcd（从 Q_Inputsd.xlsx / Q_Inputxd.xlsx 提取）
@@ -87,25 +217,12 @@ class HydrologyForecastService:
             'HYDROLOGY_API_BASE_URL',
             'http://10.4.158.35:8091'
         )
-        self._client_id = os.getenv(
-            'HYDROLOGY_API_CLIENT_ID',
-            'e5cd7e4891bf95d1d19206ce24a7b32e'
-        )
-        # Token 优先从环境变量读取，其次使用默认值
-        default_token = (
-            'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.'
-            'eyJsb2dpblR5cGUiOiJsb2dpbiIsImxvZ2luSWQiOiJzeXNfdXNlcjo0Iiwicm5TdHIiOiJvcDlXZjg5bFMycG95bU1N'
-            'RkFZRnhUYnV6TDBkY2ZsSSIsImNsaWVudGlkIjoiZTVjZDdlNDg5MWJmOTVkMWQxOTIwNmNlMjRhN2IzMmUiLCJ0'
-            'ZW5hbnRJZCI6IjAwMDAwMCIsInVzZXJJZCI6NCwidXNlck5hbWUiOiJ0ZXN0MSIsImRlcHRJZCI6MTAyLCJkZXB0'
-            'TmFtZSI6IuS6keays-enkeaKgCIsImRlcHRDYXRlZ29yeSI6IiJ9.'
-            'y2h-lz3qRpdnna2Z1pXwZTWW8QQvy0hXMx20kOV10j8'
-        )
-        self._token = os.getenv('HYDROLOGY_API_TOKEN', default_token)
 
     def _get_headers(self) -> Dict[str, str]:
+        token = hydrology_forecast_auth_service.get_token()
         return {
-            'ClientId': self._client_id,
-            'Authorization': f'Bearer {self._token}'
+            'ClientId': hydrology_forecast_auth_service._client_id,
+            'Authorization': f'Bearer {token}' if token else ''
         }
 
     def get_forecast_plans(self, date_time: str) -> Dict[str, Any]:
