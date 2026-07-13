@@ -6,35 +6,14 @@ from src.utils.station_codes import (
     get_reservoir_code, get_station_code,
     search_reservoir, search_station,
     get_all_reservoirs, get_all_stations,
-    get_reservoir_station_code
+    get_reservoir_station_code,
+    get_reservoir_name_by_code, get_station_name_by_code
 )
 from src.services.storage.database.data_access import ReservoirAccess, HydrologyStationAccess
 from src.utils.response_helper import success_response, error_response
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-def _get_reservoir_name_by_code(code: str) -> str | None:
-    """根据水库编码获取标准名称"""
-    if not code:
-        return None
-    reservoirs = get_all_reservoirs()
-    for reservoir in reservoirs:
-        if reservoir["code"] == code:
-            return reservoir["name"]
-    return None
-
-
-def _get_station_name_by_code(code: str) -> str | None:
-    """根据站点编码获取标准名称"""
-    if not code:
-        return None
-    stations = get_all_stations()
-    for station in stations:
-        if station["code"] == code:
-            return station["name"]
-    return None
 
 
 def register_ui_tools(mcp: FastMCP):
@@ -85,7 +64,7 @@ def register_ui_tools(mcp: FastMCP):
             logger.debug(f"navigate_to_reservoir_detail 返回结果: {return_value}")
             return return_value
 
-        reservoir_name_cn = _get_reservoir_name_by_code(code)
+        reservoir_name_cn = get_reservoir_name_by_code(code)
         station_code = get_reservoir_station_code(code)
 
         # 从数据库获取水库坐标信息
@@ -164,7 +143,7 @@ def register_ui_tools(mcp: FastMCP):
             logger.debug(f"navigate_to_station_detail 返回结果: {return_value}")
             return return_value
 
-        station_name_cn = _get_station_name_by_code(code)
+        station_name_cn = get_station_name_by_code(code)
 
         # 从数据库获取水文站坐标信息
         station = HydrologyStationAccess.get_by_code(code)
@@ -302,7 +281,7 @@ def register_ui_tools(mcp: FastMCP):
             logger.debug(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
             return return_value
 
-        reservoir_name_cn = _get_reservoir_name_by_code(code)
+        reservoir_name_cn = get_reservoir_name_by_code(code)
         station_code = get_reservoir_station_code(code)
 
         data = {
@@ -395,7 +374,7 @@ def register_ui_tools(mcp: FastMCP):
             logger.debug(f"navigate_to_station_forecast_page 返回结果: {return_value}")
             return return_value
 
-        station_name_cn = _get_station_name_by_code(code)
+        station_name_cn = get_station_name_by_code(code)
 
         data = {
             "station": code,
@@ -458,7 +437,7 @@ def register_ui_tools(mcp: FastMCP):
 
         reservoir_schemes = {}
         try:
-            from src.tools.plan_tools import _generate_xiaolangdi_scheme_core, _generate_sanmenxia_scheme_core
+            from src.utils.dispatch_utils import generate_xiaolangdi_scheme_core, generate_sanmenxia_scheme_core
 
             reservoirs = scheme.get("reservoirs", {})
 
@@ -475,7 +454,7 @@ def register_ui_tools(mcp: FastMCP):
                             max_outflow = outflow
                         if level is not None and (max_level is None or level > max_level):
                             max_level = level
-                    xld_scheme = _generate_xiaolangdi_scheme_core(
+                    xld_scheme = generate_xiaolangdi_scheme_core(
                         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         liu_liang=max_outflow if max_outflow is not None else 1500,
                         shui_wei=max_level if max_level is not None else 240,
@@ -496,7 +475,7 @@ def register_ui_tools(mcp: FastMCP):
                             max_outflow = outflow
                         if level is not None and (max_level is None or level > max_level):
                             max_level = level
-                    smx_scheme = _generate_sanmenxia_scheme_core(
+                    smx_scheme = generate_sanmenxia_scheme_core(
                         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         liu_liang=max_outflow if max_outflow is not None else 1000,
                         shui_wei=max_level if max_level is not None else 310,

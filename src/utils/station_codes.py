@@ -300,6 +300,31 @@ def get_all_stations() -> List[Dict[str, str]]:
     return [{"code": code, "name": name} for name, code in all_stations.items()]
 
 
+def get_reservoir_name_by_code(code: str) -> str | None:
+    _load_all_data()
+    if not code:
+        return None
+    code = code.strip()
+    for name, c in _reservoir_name_to_code.items():
+        if c == code:
+            return name
+    return None
+
+
+def get_station_name_by_code(code: str) -> str | None:
+    _load_all_data()
+    if not code:
+        return None
+    code = code.strip()
+    for name, c in _hydrology_name_to_code.items():
+        if c == code:
+            return name
+    for name, c in _rainfall_name_to_code.items():
+        if c == code:
+            return name
+    return None
+
+
 def reset_cache():
     global _initialized
     _initialized = False

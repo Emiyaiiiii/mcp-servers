@@ -5,10 +5,15 @@ import json
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from src.utils.logger import get_logger
-from src.tools.data_api_tools import _resolve_reservoir_for_api, _resolve_station
-from src.services.storage.database.data_access import (
-    WaterLevelAccess, CoefficientAccess, HolePriorityAccess
+from src.utils.data_api_utils import api_get, resolve_reservoir_for_api, resolve_station, BASE_URL
+from src.utils.dispatch_utils import (
+    generate_xiaolangdi_scheme_core, generate_sanmenxia_scheme_core,
+    get_water_level_config, get_coefficient_table, get_dikong_order
 )
+from src.utils.warning_utils import (
+    get_xiaolangdi_warning_core, get_sanmenxia_warning_core, get_yellow_river_emergency_response_core
+)
+from src.utils.flood_utils import get_risk_by_huayuankou_flow_core, get_flood_submerge_core
 from src.services.external_api.enhanced_search_service import enhanced_search_service
 
 logger = get_logger(__name__)
@@ -19,23 +24,15 @@ KNOWLEDGE_BASE_API_URL = settings.KNOWLEDGE_BASE_API_URL
 
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 
+_get = api_get
+_resolve_reservoir_for_api = resolve_reservoir_for_api
+_resolve_station = resolve_station
 
-def _get_water_level_config(reservoir_code: str, level: float) -> dict:
-    """从数据库获取水位-流量配置"""
-    config = WaterLevelAccess.get_by_level(reservoir_code, level)
-    if not config:
-        logger.warning(f"未找到水位配置: {reservoir_code}, {level}")
-    return config or {}
-
-
-def _get_coefficient_table(reservoir_code: str, level_range: str) -> list:
-    """从数据库获取调度系数表"""
-    return CoefficientAccess.get_by_level_range(reservoir_code, level_range)
-
-
-def _get_dikong_order(reservoir_code: str) -> list:
-    """从数据库获取底孔优先级顺序"""
-    return HolePriorityAccess.get_priority_order(reservoir_code)
+_generate_xiaolangdi_scheme_core = generate_xiaolangdi_scheme_core
+_generate_sanmenxia_scheme_core = generate_sanmenxia_scheme_core
+_get_xiaolangdi_warning = get_xiaolangdi_warning_core
+_get_sanmenxia_warning = get_sanmenxia_warning_core
+_get_overall_emergency_response = get_yellow_river_emergency_response_core
 
 
 def register_plan_tools(mcp: FastMCP):
@@ -320,21 +317,21 @@ def register_plan_tools(mcp: FastMCP):
             risk_result = {}
             try:
                 if huayuankou_flow:
-                    risk_result = _get_risk_by_huayuankou_flow_core(float(huayuankou_flow))
+                    risk_result = get_risk_by_huayuankou_flow_core(float(huayuankou_flow))
             except Exception as e:
                 logger.warning(f"出险判断失败: {e}")
 
             submerge_result = {}
             try:
                 if huayuankou_flow:
-                    submerge_result = _get_flood_submerge_core(float(huayuankou_flow))
+                    submerge_result = get_flood_submerge_core(float(huayuankou_flow))
             except Exception as e:
                 logger.warning(f"淹没分析失败: {e}")
 
             xld_scheme = {}
             try:
                 if reservoir_level or tongguan_flow:
-                    data = _generate_xiaolangdi_scheme_core(
+                    data = generate_xiaolangdi_scheme_core(
                         date=generation_time,
                         liu_liang=float(tongguan_flow) if tongguan_flow else 1500,
                         shui_wei=float(reservoir_level) if reservoir_level else 240,
@@ -347,7 +344,7 @@ def register_plan_tools(mcp: FastMCP):
             smx_scheme = {}
             try:
                 if sanmenxia_level or tongguan_flow:
-                    data = _generate_sanmenxia_scheme_core(
+                    data = generate_sanmenxia_scheme_core(
                         date=generation_time,
                         liu_liang=float(tongguan_flow) if tongguan_flow else 1000,
                         shui_wei=float(sanmenxia_level) if sanmenxia_level else 310,
@@ -360,7 +357,7 @@ def register_plan_tools(mcp: FastMCP):
             xld_warning = {}
             try:
                 if tongguan_flow or reservoir_level or xiaolangdi_outflow:
-                    xld_warning = await _get_xiaolangdi_warning(
+                    xld_warning = get_xiaolangdi_warning_core(
                         float(tongguan_flow) if tongguan_flow else 0,
                         float(reservoir_level) if reservoir_level else 0,
                         float(xiaolangdi_outflow) if xiaolangdi_outflow else 0
@@ -371,7 +368,7 @@ def register_plan_tools(mcp: FastMCP):
             smx_warning = {}
             try:
                 if longmen_flow or tongguan_flow or huaxian_flow:
-                    smx_warning = await _get_sanmenxia_warning(
+                    smx_warning = get_sanmenxia_warning_core(
                         float(longmen_flow) if longmen_flow else 0,
                         float(tongguan_flow) if tongguan_flow else 0,
                         float(huaxian_flow) if huaxian_flow else 0
@@ -381,7 +378,7 @@ def register_plan_tools(mcp: FastMCP):
 
             overall_response = {}
             try:
-                overall_response = await _get_overall_emergency_response(
+                overall_response = get_yellow_river_emergency_response_core(
                     luhun_level=float(luhun_level) if luhun_level else None,
                     hekoucun_level=float(hekoucun_level) if hekoucun_level else None,
                     xiaolangdi_level=float(reservoir_level) if reservoir_level else None,
@@ -675,250 +672,6 @@ def register_plan_tools(mcp: FastMCP):
         logger.debug(f"query_knowledge_base 返回结果: 成功检索到 {len(entities)} 个实体, {len(relationships)} 个关系, {len(chunks)} 个文本片段, {len(knowledge_base_chunks)} 个知识库文档")
         return return_value
 
-
-    async def _get_xiaolangdi_warning(tongguan_flow: float, reservoir_level: float, outflow_flow: float) -> dict:
-        """小浪底预警等级判断"""
-        result = {
-            "level": "未达到预警级别",
-            "source": "",
-            "measures": []
-        }
-
-        warnings = []
-
-        if tongguan_flow is not None:
-            if tongguan_flow > 15000:
-                warnings.append(("I级", "潼关流量>15000m³/s"))
-            elif 10000 <= tongguan_flow < 15000:
-                warnings.append(("I级", "潼关流量10000~15000m³/s"))
-            elif 8000 <= tongguan_flow < 10000:
-                warnings.append(("II级", "潼关流量8000~10000m³/s"))
-            elif 5000 <= tongguan_flow < 8000:
-                warnings.append(("III级", "潼关流量5000~8000m³/s"))
-
-        if reservoir_level is not None:
-            if reservoir_level > 275:
-                warnings.append(("I级", "水库蓄水位>275m"))
-            elif reservoir_level == 275:
-                warnings.append(("I级", "水库蓄水位=275m"))
-            elif 272.5 <= reservoir_level < 275:
-                warnings.append(("II级", "水库蓄水位272.5~275m"))
-            elif 270 <= reservoir_level < 272.5:
-                warnings.append(("III级", "水库蓄水位270~272.5m"))
-
-        if outflow_flow is not None:
-            if outflow_flow >= 10000:
-                warnings.append(("I级", "出库流量≥10000m³/s"))
-            elif 8000 <= outflow_flow < 10000:
-                warnings.append(("I级", "出库流量8000~10000m³/s"))
-            elif 6000 <= outflow_flow < 8000:
-                warnings.append(("II级", "出库流量6000~8000m³/s"))
-            elif 4000 <= outflow_flow < 6000:
-                warnings.append(("III级", "出库流量4000~6000m³/s"))
-
-        if warnings:
-            warnings.sort(key=lambda x: {"I级": 0, "II级": 1, "III级": 2}[x[0]])
-            highest = warnings[0]
-            result["level"] = highest[0]
-            result["source"] = highest[1]
-
-        return result
-
-    async def _get_sanmenxia_warning(longmen_flow: float, tongguan_flow: float, huaxian_flow: float) -> dict:
-        """三门峡预警等级判断"""
-        result = {
-            "level": "无预警",
-            "trigger_source": ""
-        }
-
-        warnings = []
-
-        if longmen_flow is not None:
-            if longmen_flow >= 8000:
-                warnings.append(("I级", "龙门流量≥8000m³/s"))
-            elif 6000 <= longmen_flow < 8000:
-                warnings.append(("II级", "龙门流量6000~8000m³/s"))
-            elif 4000 <= longmen_flow < 6000:
-                warnings.append(("III级", "龙门流量4000~6000m³/s"))
-
-        if tongguan_flow is not None:
-            if tongguan_flow >= 8000:
-                warnings.append(("I级", "潼关流量≥8000m³/s"))
-            elif 6000 <= tongguan_flow < 8000:
-                warnings.append(("II级", "潼关流量6000~8000m³/s"))
-            elif 4000 <= tongguan_flow < 6000:
-                warnings.append(("III级", "潼关流量4000~6000m³/s"))
-
-        if huaxian_flow is not None:
-            if huaxian_flow >= 3000:
-                warnings.append(("I级", "华县流量≥3000m³/s"))
-            elif 2000 <= huaxian_flow < 3000:
-                warnings.append(("II级", "华县流量2000~3000m³/s"))
-            elif 1000 <= huaxian_flow < 2000:
-                warnings.append(("III级", "华县流量1000~2000m³/s"))
-
-        if warnings:
-            warnings.sort(key=lambda x: {"I级": 0, "II级": 1, "III级": 2}[x[0]])
-            highest = warnings[0]
-            result["level"] = highest[0]
-            result["trigger_source"] = highest[1]
-
-        return result
-
-    async def _get_overall_emergency_response(
-        luhun_level: float = None,
-        hekoucun_level: float = None,
-        xiaolangdi_level: float = None,
-        sanmenxia_level: float = None,
-        tongguan_flow: float = None,
-        huayuankou_flow: float = None
-    ) -> dict:
-        """黄河总体应急响应判断"""
-        result = {
-            "response_level": "无预警",
-            "description": "根据洪水预报及各水库水位分析，当前无预警"
-        }
-
-        warnings = []
-
-        if luhun_level is not None and luhun_level >= 319.5:
-            warnings.append(("I级", "陆浑水库水位≥319.5m"))
-        elif luhun_level is not None and luhun_level >= 318:
-            warnings.append(("II级", "陆浑水库水位≥318m"))
-
-        if hekoucun_level is not None and hekoucun_level >= 275:
-            warnings.append(("I级", "河口村水库水位≥275m"))
-        elif hekoucun_level is not None and hekoucun_level >= 270:
-            warnings.append(("II级", "河口村水库水位≥270m"))
-
-        if xiaolangdi_level is not None and xiaolangdi_level >= 275:
-            warnings.append(("I级", "小浪底水库水位≥275m"))
-        elif xiaolangdi_level is not None and xiaolangdi_level >= 272.5:
-            warnings.append(("II级", "小浪底水库水位≥272.5m"))
-
-        if sanmenxia_level is not None and sanmenxia_level >= 325:
-            warnings.append(("I级", "三门峡水库水位≥325m"))
-        elif sanmenxia_level is not None and sanmenxia_level >= 320:
-            warnings.append(("II级", "三门峡水库水位≥320m"))
-
-        if tongguan_flow is not None and tongguan_flow >= 8000:
-            warnings.append(("I级", "潼关流量≥8000m³/s"))
-        elif tongguan_flow is not None and tongguan_flow >= 5000:
-            warnings.append(("II级", "潼关流量≥5000m³/s"))
-
-        if huayuankou_flow is not None and huayuankou_flow >= 8000:
-            warnings.append(("I级", "花园口流量≥8000m³/s"))
-        elif huayuankou_flow is not None and huayuankou_flow >= 4000:
-            warnings.append(("II级", "花园口流量≥4000m³/s"))
-
-        if warnings:
-            warnings.sort(key=lambda x: {"I级": 0, "II级": 1, "III级": 2}[x[0]])
-            highest = warnings[0]
-            level_map = {
-                "I级": "I级应急响应",
-                "II级": "II级应急响应",
-                "III级": "III级应急响应"
-            }
-            result["response_level"] = level_map.get(highest[0], highest[0])
-            result["description"] = f"触发条件: {highest[1]}"
-
-        return result
-
-def _generate_xiaolangdi_scheme_core(
-    date: str,
-    liu_liang: float,
-    shui_wei: float,
-    han_sha_liang: float
-) -> dict:
-    """
-    生成小浪底水库机组孔洞调度方案（内部函数）。
-
-    Args:
-        date: 日期时间，格式: yyyy-MM-dd HH:mm:ss
-        liu_liang: 出库流量（m³/s）
-        shui_wei: 当前水位（m）
-        han_sha_liang: 含沙量（kg/m³）
-
-    Returns:
-        调度方案建议，包含推荐方案描述
-    """
-    try:
-        q = int(round(liu_liang))
-        wl = shui_wei
-        sand = han_sha_liang
-        
-        cfg = _get_water_level_config("XLD", wl)
-        
-        if not cfg or not cfg.get("hole_details"):
-            return {"date": date, "tuijianfangan": "水位不匹配，无法生成调度方案"}
-        
-        stop_turb = wl < 215 or sand > 20
-        
-        if stop_turb:
-            turb_txt = "根据当前机组状态推荐全停，结合实际调整机组。"
-            hole_target = q
-        else:
-            turb_txt = "根据当前机组状态推荐全开6台机组，每台300m³/s，合计1800m³/s，结合实际调整。"
-            hole_target = max(q - 1800, 0)
-        
-        holes = cfg.get("hole_details", [])
-        
-        total = 0
-        used = []
-        hole_list = []
-        for hole in holes:
-            if total >= hole_target:
-                break
-            max_flow = hole.get("流量", 0)
-            take = min(max_flow, hole_target - total)
-            hole_number = hole.get("编号", "")
-            hole_index = int(hole_number.replace("号", "").replace("洞", "")) if hole_number else 0
-            used.append((hole.get("type", "未知"), hole_number, take))
-            hole_list.append({
-                "type": hole.get("type"),
-                "number": hole_number,
-                "index": hole_index,
-                "flow": take,
-                "max_flow": max_flow
-            })
-            total += take
-        
-        if not used:
-            hole_txt = "无需开启孔洞"
-        else:
-            group = {}
-            for hole_type, number, value in used:
-                group.setdefault(hole_type, []).append(f"{number}：{value}m³/s")
-            
-            parts = []
-            for hole_type in ["排沙洞", "孔板洞", "明流洞"]:
-                if hole_type in group:
-                    parts.append(f"{len(group[hole_type])}条{hole_type}（{', '.join(group[hole_type])}）")
-            
-            last_type, last_number, last_value = used[-1]
-            for hole in holes:
-                if hole.get("编号") == last_number:
-                    max_flow = hole.get("流量", 0)
-                    if last_value < max_flow:
-                        parts.append(f"{last_number}{last_type}剩余流量补足：{last_value}m³/s")
-                    break
-            
-            hole_txt = "，".join(parts)
-        
-        reason = f"因为当前泥沙含量为{sand}kg/m³，水位是{wl}m，出库流量为{q}m³/s，{turb_txt}根据孔洞检修情况推荐：{hole_txt}，结合实际调整。"
-        return {
-            "date": date,
-            "tuijianfangan": reason,
-            "holes": hole_list,
-            "total_flow": total,
-            "unit_status": "全停" if stop_turb else "全开6台机组"
-        }
-        
-    except Exception as e:
-        error_msg = f"生成调度方案时出错: {str(e)}"
-        logger.error(error_msg)
-        return {"date": date, "tuijianfangan": f"生成调度方案失败: {error_msg}"}
-
     @mcp.tool()
     async def generate_xiaolangdi_scheme(
         date: str,
@@ -944,223 +697,6 @@ def _generate_xiaolangdi_scheme_core(
         
         logger.debug(f"generate_xiaolangdi_scheme 返回结果: {return_value}")
         return return_value
-
-def _generate_sanmenxia_scheme_core(
-    date: str,
-    liu_liang: float,
-    shui_wei: float,
-    han_sha_liang: float
-) -> dict:
-    """
-    生成三门峡水库机组孔洞调度方案（内部函数）。
-
-    Args:
-        date: 日期时间，格式: yyyy-MM-dd HH:mm:ss
-        liu_liang: 出库流量（m³/s）
-        shui_wei: 当前水位（m）
-        han_sha_liang: 含沙量（kg/m³）
-
-    Returns:
-        调度方案建议，包含推荐方案描述及各部件状态
-    """
-    try:
-        q_total = round(liu_liang)
-        wl = shui_wei
-        sand = han_sha_liang
-
-        cfg = _get_water_level_config("SMX", wl)
-        
-        if not cfg:
-            return {"date": date, "tuijianfangan": "水位不匹配，无法生成调度方案"}
-        
-        q_dk = round(cfg.get("bottom_hole_flow", 0))
-        q_sk = round(cfg.get("deep_hole_flow", 0))
-        q_sd_full = cfg.get("tunnel_flow", 0)
-
-        scene1 = wl < 302 or sand > 60
-        jizu_text = ""
-        q_jz = 0
-        req = q_total
-
-        if scene1:
-            jizu_text = "根据当前泥沙含量和水位条件推荐机组全停"
-            q_jz = 0
-            req = q_total
-        else:
-            if wl > 322:
-                jizu_text = "水位>322m，机组全部关停，仅使用底孔、隧洞、深孔、钢管泄流"
-                scene1 = True
-                q_jz = 0
-                req = q_total
-            elif 302 <= wl < 312:
-                if q_total < 1200:
-                    q_jz = q_total
-                    jizu_text = f"推荐5台机组运行，合计{q_jz}m³/s，无需开启孔洞"
-                else:
-                    q_jz = 1200
-                    jizu_text = f"推荐5台机组满负荷运行，合计{q_jz}m³/s"
-            elif 312 <= wl < 314:
-                if q_total < 1500:
-                    q_jz = q_total
-                    jizu_text = f"推荐7台机组运行，合计{q_jz}m³/s，无需开启孔洞"
-                else:
-                    q_jz = 1500
-                    jizu_text = f"推荐7台机组满负荷运行，合计{q_jz}m³/s"
-            else:
-                if q_total < 1300:
-                    q_jz = q_total
-                    jizu_text = f"推荐7台机组运行，合计{q_jz}m³/s，无需开启孔洞"
-                else:
-                    q_jz = 1300
-                    jizu_text = f"推荐7台机组满负荷运行，合计{q_jz}m³/s"
-            if not scene1:
-                req = max(q_total - q_jz, 0)
-
-        dk_list = []
-        sk_list = []
-        sd_q = 0
-        sd_open = 0.0
-        sk_text = "无需开启深孔"
-        
-        dikong_order = _get_dikong_order("SMX")
-        if not dikong_order:
-            dikong_order = list(range(1, 13))
-
-        if req > 0:
-            for no in dikong_order:
-                if req >= q_dk:
-                    dk_list.append((no, q_dk))
-                    req -= q_dk
-                else:
-                    break
-            
-            if req > 0 and q_sk > 0:
-                for no in range(1, 13):
-                    if req >= q_sk:
-                        sk_list.append((no, q_sk))
-                        req -= q_sk
-                    else:
-                        break
-                if sk_list:
-                    sk_text = f"开启{len(sk_list)}条深孔（{', '.join([f'{n}号深孔：{q}m³/s' for n, q in sk_list])}），合计{sum(q for _, q in sk_list)}m³/s"
-            
-            if req > 0 and q_sd_full > 0:
-                sd_q = req
-                if 300 <= wl <= 310:
-                    coeff_key = "300-310"
-                elif 311 <= wl <= 315:
-                    coeff_key = "311-315"
-                else:
-                    coeff_key = "315以上"
-                
-                coeff_rules = _get_coefficient_table("SMX", coeff_key)
-                if coeff_rules:
-                    n_est = (sd_q * 8) / (q_sd_full * 0.9)
-                    for rule in coeff_rules:
-                        low, high = rule["range_min"], rule["range_max"]
-                        k = rule["coeff_value"]
-                        n = (sd_q * 8) / (q_sd_full * k)
-                        if low <= round(n, 2) <= high:
-                            sd_open = round(n, 1)
-                            break
-                    else:
-                        sd_open = round((sd_q * 8) / q_sd_full, 1)
-                else:
-                    sd_open = round((sd_q * 8) / q_sd_full, 1)
-
-        dk_items = [f"{n}号底孔：{q}m³/s" for n, q in dk_list]
-        dk_count = len(dk_list)
-        dk_sum = sum(q for _, q in dk_list)
-        dikong_text = f"开启{dk_count}条底孔（{', '.join(dk_items)}），合计{dk_sum}m³/s" if dk_count else "无需开启底孔"
-
-        sk_sum = sum(q for _, q in sk_list)
-
-        if sd_q > 0:
-            single_tunnel_flow = q_sd_full
-            if sd_q <= single_tunnel_flow:
-                suidong_text = f"开启1号隧洞，开度{sd_open}m，流量{sd_q}m³/s"
-            else:
-                first_flow = min(sd_q, single_tunnel_flow)
-                second_flow = sd_q - first_flow
-                first_open = sd_open
-                second_open = round((second_flow * 8) / single_tunnel_flow, 1)
-                suidong_text = f"开启1号隧洞（开度{first_open}m，流量{first_flow}m³/s）、2号隧洞（开度{second_open}m，流量{second_flow}m³/s），合计{sd_q}m³/s"
-        else:
-            suidong_text = "无需开启隧洞"
-
-        tuan = []
-        if dk_list:
-            tuan.append(dikong_text.split("，")[0])
-        if sk_list:
-            tuan.append(sk_text.split("，")[0])
-        if sd_q:
-            tuan.append(suidong_text)
-        hole_str = "，".join(tuan) if tuan else "无需开启泄流孔洞"
-
-        tui = f"因为当前泥沙含量为{sand}kg/m³，水位是{wl}m，出库流量为{q_total}m³/s，{jizu_text}，结合实际调整机组。根据孔洞检修情况推荐：{hole_str}，结合实际调整。"
-
-        hole_list = []
-        for no, q in dk_list:
-            hole_list.append({
-                "type": "底孔",
-                "number": f"{no}号",
-                "index": no,
-                "flow": q,
-                "max_flow": q_dk
-            })
-        for no, q in sk_list:
-            hole_list.append({
-                "type": "深孔",
-                "number": f"{no}号",
-                "index": no,
-                "flow": q,
-                "max_flow": q_sk
-            })
-        if sd_q > 0:
-            single_tunnel_flow = q_sd_full
-            
-            if sd_q <= single_tunnel_flow:
-                hole_list.append({
-                    "type": "隧洞",
-                    "number": "1号",
-                    "index": 1,
-                    "flow": sd_q,
-                    "opening": sd_open,
-                    "max_flow": single_tunnel_flow
-                })
-            else:
-                remaining_flow = sd_q
-                tunnel_count = 1
-                
-                while remaining_flow > 0 and tunnel_count <= 2:
-                    tunnel_flow = min(remaining_flow, single_tunnel_flow)
-                    hole_list.append({
-                        "type": "隧洞",
-                        "number": f"{tunnel_count}号",
-                        "index": tunnel_count,
-                        "flow": tunnel_flow,
-                        "opening": sd_open if tunnel_count == 1 else round((tunnel_flow * 8) / single_tunnel_flow, 1),
-                        "max_flow": single_tunnel_flow
-                    })
-                    remaining_flow -= tunnel_flow
-                    tunnel_count += 1
-
-        return {
-            "date": date,
-            "tuijianfangan": tui,
-            "jizu": jizu_text + "，结合实际调整",
-            "dikong": dikong_text,
-            "shenkong": sk_text,
-            "suidong": suidong_text,
-            "holes": hole_list,
-            "total_flow": dk_sum + sk_sum + sd_q,
-            "unit_status": "全停" if scene1 else "部分运行"
-        }
-
-    except Exception as e:
-        error_msg = f"生成调度方案时出错: {str(e)}"
-        logger.error(error_msg)
-        return {"date": date, "tuijianfangan": f"生成调度方案失败: {error_msg}"}
 
     @mcp.tool()
     async def generate_sanmenxia_scheme(
@@ -1188,75 +724,6 @@ def _generate_sanmenxia_scheme_core(
         logger.debug(f"generate_sanmenxia_scheme 返回结果: {return_value}")
         return return_value
 
-def _get_risk_by_huayuankou_flow_core(flow: float) -> dict:
-    """
-    根据花园口流量判断黄河出险状况（内部函数）。
-
-    Args:
-        flow: 花园口流量，单位 m³/s
-
-    Returns:
-        完整出险信息，包含流量等级、河南和山西的风险描述、危险类型和处置建议
-    """
-    try:
-        result = {
-            "flow": flow,
-            "level": "",
-            "henan": "",
-            "shanxi": "",
-            "danger_type": [],
-            "suggestion": ""
-        }
-
-        if flow < 4000:
-            result["level"] = "4000m³/s 以下"
-            result["henan"] = "流量持续较久时，花园口以下宽河道河势可能较大变化，部分河道工程长期受冲可能发生较大及以上险情。"
-            result["shanxi"] = "由黄河河务部门查险抢险；河势突变、漫滩或较大险情时，市县领导靠前指挥。"
-            result["danger_type"] = ["河势变化", "河道工程受冲险情"]
-            result["suggestion"] = "正常巡查防守，关注河势变化。"
-
-        elif 4000 <= flow < 6000:
-            result["level"] = "4000～6000m³/s"
-            result["henan"] = "部分工程接近或超标准，低滩区可能漫水，河势易上提/下挫、坐湾生险，工程出险几率增大。"
-            result["shanxi"] = "冲刷力强，局部河势变化大；险工、控导、新修工程易根石走失、坦石坍塌、墩蛰；部分控导可能漫顶；漫滩偎堤易风浪淘刷、渗水、管涌；道路可能中断。"
-            result["danger_type"] = ["低滩漫水", "河势变化", "工程出险", "风浪淘刷", "渗水", "管涌"]
-            result["suggestion"] = "重点盯防控导、险工、新修工程，加强巡查。"
-
-        elif 6000 <= flow < 10000:
-            result["level"] = "6000～10000m³/s"
-            result["henan"] = "部分高滩、全部低滩漫水，水深1~3m；偎堤水深1~4m；涉及6市，人口62.90~198.97万，转移6.77~91.75万人。"
-            result["shanxi"] = "临黄大堤大部/全部偎水，堤根水深2~6m；薄弱堤段易渗水、管涌、裂缝、坍塌、顺堤行洪、风浪淘刷；控导大部/全部漫顶，可能揭顶后溃；河口流路可能摆动/分汊；险工易根石走失、坝岸墩蛰。"
-            result["danger_type"] = ["滩区漫水", "偎堤", "渗水", "管涌", "坍塌", "控导漫顶", "河势变化", "河口分汊"]
-            result["suggestion"] = "全面巡查堤防，重点防守薄弱段、控导工程，做好滩区转移准备。"
-
-        elif 10000 <= flow < 15000:
-            result["level"] = "10000～15000m³/s"
-            result["henan"] = "滩区大部分被淹；偎堤长度约560km，水深2~5m；涉及6市，人口198.97~209.50万，转移91.75~113.94万人。"
-            result["shanxi"] = "工程面临严峻考验；险工易坍塌、墩蛰、垮坝；控导全部漫顶、部分揭顶后溃；河势巨变，可能斜河、横河；多堤段易顺堤行洪；堤防易严重渗水、管涌、滑坡、漏洞、风浪塌坡；河口流路可能摆动/分汊；东平湖围坝可能出险；桥梁、管线易受撞击。"
-            result["danger_type"] = ["滩区大部淹没", "偎堤", "渗水", "管涌", "滑坡", "漏洞", "垮坝", "控导溃失", "斜河横河", "顺堤行洪", "河口分汊"]
-            result["suggestion"] = "全线设防，人员全部上堤，重点防控漏洞、滑坡、顺堤行洪。"
-
-        elif 15000 <= flow < 22000:
-            result["level"] = "15000～22000m³/s"
-            result["henan"] = "堤防全线偎水，最大水深8m；滩区全部上水，局部水深超5m；涉及人口209.50~211.13万，转移113.94~120.81万人。"
-            result["shanxi"] = "水位高、流速大、持续久；险工普遍坍塌、墩蛰、垮坝；堤防险情剧增，易漏洞；控导严重揭顶后溃；河势巨变；多堤段极易顺堤行洪；流量>18000时东明河段可能滚河；东平湖围堤险情严重；河口可能顺堤行洪、流路摆动/分汊；桥梁设施易撞击损毁。"
-            result["danger_type"] = ["全线偎堤", "滩区全淹", "垮坝", "漏洞", "顺堤行洪", "滚河风险", "控导溃失", "河势巨变", "河口分汊"]
-            result["suggestion"] = "一级战备，全员上堤，严防滚河、漏洞、顺堤行洪，启用应急抢险预案。"
-
-        elif flow >= 22000:
-            result["level"] = "≥22000m³/s（超标准洪水）"
-            result["henan"] = "堤防全线偎水，随时可能渗漏、管涌、脱坡等重大险情；滩区全部被淹。"
-            result["shanxi"] = "滩区全部漫滩，堤根水深≥8.5m；水位超标准；高村以上利用超高/子堰行洪；高村以下启用北金堤滞洪区；东平湖滞洪，控制艾山以下≤10000m³/s。"
-            result["danger_type"] = ["全线重大险情", "漫滩", "偎水", "超标准运用", "滞洪区运用"]
-            result["suggestion"] = "启动超标准洪水预案，启用北金堤、东平湖滞洪，全力保堤防安全。"
-
-        return result
-
-    except Exception as e:
-        error_msg = f"判断出险情况时出错: {str(e)}"
-        logger.error(error_msg)
-        return {"error": error_msg}
-
     @mcp.tool()
     async def get_risk_by_huayuankou_flow(flow: float) -> dict:
         """
@@ -1274,237 +741,6 @@ def _get_risk_by_huayuankou_flow_core(flow: float) -> dict:
 
         logger.debug(f"get_risk_by_huayuankou_flow 返回结果: {result}")
         return result
-
-def _get_flood_submerge_core(huayuankou_flow: float) -> dict:
-    """
-    黄河滩区淹没分析（内部函数）。
-
-    Args:
-        huayuankou_flow: 花园口流量，单位 m³/s
-
-    Returns:
-        淹没结果，包含河南、山东的淹没数据、等级和描述
-    """
-    try:
-        q = huayuankou_flow
-        result = {
-            "flow": q,
-            "level": "",
-            "description": "",
-            "henan": {},
-            "shandong": {}
-        }
-
-        if q < 6000:
-            result["level"] = "<6000 m³/s"
-            result["description"] = "主河道正常行洪，不会漫滩，无村庄围困，无需迁移安置"
-            result["henan"] = {
-                "进水村庄数": 0,
-                "进水人口": 0,
-                "水围村庄数": 0,
-                "水围人口": 0,
-                "淹没滩地(万亩)": 0,
-                "淹没耕地(万亩)": 0,
-                "经济损失(亿元)": 0,
-                "备注": "无淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 0,
-                "淹没耕地(万亩)": 0,
-                "滩区进水数": 0,
-                "自然村进水数": 0,
-                "自然村围困数": 0,
-                "涉及人口": 0,
-                "需转移安置": 0,
-                "就地就近安置": 0,
-                "备注": "无淹没"
-            }
-
-        elif 6000 <= q < 8000:
-            result["level"] = "6000 m³/s"
-            result["description"] = "开始漫滩，河南、山东滩区局部进水、围困"
-            result["henan"] = {
-                "进水村庄数": 70,
-                "进水人口": 6.18,
-                "水围村庄数": 273,
-                "水围人口": 24.85,
-                "淹没滩地(万亩)": 110.29,
-                "淹没耕地(万亩)": 70.81,
-                "经济损失(亿元)": 140.87,
-                "备注": "局部淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 39.07,
-                "淹没耕地(万亩)": 31.40,
-                "滩区进水数": 93,
-                "自然村进水数": 18,
-                "自然村围困数": 46,
-                "涉及人口": 4.54,
-                "需转移安置": 2.46,
-                "就地就近安置": 2.09,
-                "备注": "局部漫滩"
-            }
-
-        elif 6000 < q <= 8000:
-            result["level"] = "8000 m³/s"
-            result["description"] = "大面积漫滩，河南、山东淹没范围显著扩大"
-            result["henan"] = {
-                "进水村庄数": 438,
-                "进水人口": 51.47,
-                "水围村庄数": 280,
-                "水围人口": 27.07,
-                "淹没滩地(万亩)": 215.53,
-                "淹没耕地(万亩)": 152.85,
-                "经济损失(亿元)": 327.17,
-                "备注": "大面积淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 204.05,
-                "淹没耕地(万亩)": 134.34,
-                "滩区进水数": 108,
-                "自然村进水数": 105,
-                "自然村围困数": 206,
-                "涉及人口": 25.26,
-                "需转移安置": 5.70,
-                "就地就近安置": 16.98,
-                "备注": "大面积漫滩"
-            }
-
-        elif 8000 < q <= 10000:
-            result["level"] = "10000 m³/s"
-            result["description"] = "山东滩区全部漫滩，河南大规模淹没"
-            result["henan"] = {
-                "进水村庄数": 905,
-                "进水人口": 112.70,
-                "水围村庄数": 191,
-                "水围人口": 18.53,
-                "淹没滩地(万亩)": 323.22,
-                "淹没耕地(万亩)": 219.20,
-                "经济损失(亿元)": 467.43,
-                "备注": "大规模淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 228.35,
-                "淹没耕地(万亩)": 174.27,
-                "滩区进水数": 109,
-                "自然村进水数": 222,
-                "自然村围困数": 161,
-                "涉及人口": 31.42,
-                "需转移安置": 7.44,
-                "就地就近安置": 22.63,
-                "备注": "全部漫滩"
-            }
-
-        elif 10000 < q <= 12370:
-            result["level"] = "12370 m³/s"
-            result["description"] = "河南接近全淹没，山东维持全漫滩"
-            result["henan"] = {
-                "进水村庄数": 1029,
-                "进水人口": 125.22,
-                "水围村庄数": 80,
-                "水围人口": 6.97,
-                "淹没滩地(万亩)": 329.80,
-                "淹没耕地(万亩)": 223.09,
-                "经济损失(亿元)": 494.89,
-                "备注": "接近全淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 234.71,
-                "淹没耕地(万亩)": 176.90,
-                "滩区进水数": 109,
-                "自然村进水数": 243,
-                "自然村围困数": 157,
-                "涉及人口": 31.68,
-                "需转移安置": 20.09,
-                "就地就近安置": 11.59,
-                "备注": "全漫滩"
-            }
-
-        elif 12370 < q <= 15700:
-            result["level"] = "15700 m³/s"
-            result["description"] = "河南全滩区淹没，山东保持全漫滩"
-            result["henan"] = {
-                "进水村庄数": 1103,
-                "进水人口": 134.30,
-                "水围村庄数": 48,
-                "水围人口": 3.99,
-                "淹没滩地(万亩)": 342.10,
-                "淹没耕地(万亩)": 234.10,
-                "经济损失(亿元)": 507.66,
-                "备注": "全滩区淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 234.71,
-                "淹没耕地(万亩)": 176.90,
-                "滩区进水数": 109,
-                "自然村进水数": 243,
-                "自然村围困数": 157,
-                "涉及人口": 31.68,
-                "需转移安置": 20.09,
-                "就地就近安置": 11.59,
-                "备注": "全漫滩"
-            }
-
-        elif 15700 < q < 22000:
-            result["level"] = "15700~22000 m³/s（大洪水）"
-            result["description"] = "河南全滩区淹没，山东全漫滩"
-            result["henan"] = {
-                "进水村庄数": 1103,
-                "进水人口": 134.30,
-                "水围村庄数": 48,
-                "水围人口": 3.99,
-                "淹没滩地(万亩)": 342.10,
-                "淹没耕地(万亩)": 234.10,
-                "经济损失(亿元)": 507.66,
-                "备注": "全滩区淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 234.71,
-                "淹没耕地(万亩)": 176.90,
-                "滩区进水数": 109,
-                "自然村进水数": 243,
-                "自然村围困数": 157,
-                "涉及人口": 31.68,
-                "需转移安置": 20.09,
-                "就地就近安置": 11.59,
-                "备注": "全漫滩"
-            }
-
-        elif q >= 22000:
-            result["level"] = "≥22000 m³/s（超标准洪水）"
-            result["description"] = "河南、山东全滩区淹没，最高等级淹没"
-            result["henan"] = {
-                "进水村庄数": 1196,
-                "进水人口": 144.66,
-                "水围村庄数": 0,
-                "水围人口": 0,
-                "淹没滩地(万亩)": 365.00,
-                "淹没耕地(万亩)": 253.10,
-                "经济损失(亿元)": 529.20,
-                "备注": "全淹没（超标准）"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 234.71,
-                "淹没耕地(万亩)": 176.90,
-                "滩区进水数": 109,
-                "自然村进水数": 243,
-                "自然村围困数": 157,
-                "涉及人口": 31.68,
-                "需转移安置": 20.09,
-                "就地就近安置": 11.59,
-                "备注": "全漫滩"
-            }
-
-        else:
-            result["level"] = "未知流量"
-            result["description"] = "无法判断"
-
-        return result
-
-    except Exception as e:
-        error_msg = f"分析滩区淹没时出错: {str(e)}"
-        logger.error(error_msg)
-        return {"error": error_msg}
 
     @mcp.tool()
     async def get_flood_submerge(huayuankou_flow: float) -> dict:

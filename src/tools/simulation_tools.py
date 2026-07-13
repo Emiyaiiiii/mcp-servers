@@ -10,13 +10,7 @@ logger = get_logger(__name__)
 RESERVOIR_DATA = {res['id']: res for res in config.reservoirs}
 RESERVOIR_NAMES = list(RESERVOIR_DATA.keys())
 GATE_TYPES_MAP = {res_id: list(res.get('gates', {}).keys()) for res_id, res in RESERVOIR_DATA.items() if 'gates' in res}
-
-
-def _get_reservoir_choices() -> str:
-    return ", ".join([f"{r['id']}({r['name']})" for r in config.reservoirs])
-
-
-RESERVOIR_CHOICES = _get_reservoir_choices()
+RESERVOIR_CHOICES = ", ".join([f"{r['id']}({r['name']})" for r in config.reservoirs])
 GATE_RESERVOIR_CHOICES = ", ".join(GATE_TYPES_MAP.keys())
 
 
