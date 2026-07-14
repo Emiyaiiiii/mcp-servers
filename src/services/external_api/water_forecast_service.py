@@ -191,13 +191,9 @@ class WaterForecastService:
             logger.info(f"正在获取预报方案清单: {url}")
             response = self._session.get(url, headers=headers, timeout=30)
             
-            logger.info(f"预报方案清单响应状态码: {response.status_code}")
-            logger.info(f"预报方案清单响应内容: {response.text}")
-            
             response.raise_for_status()
             
             result = response.json()
-            logger.info(f"预报方案清单获取成功，数据: {result}")
             return result
                 
         except requests.exceptions.RequestException as e:

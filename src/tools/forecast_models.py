@@ -60,6 +60,14 @@ def register_forecast_models(mcp: FastMCP):
         if not end_time:
             end_time = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
         
+        # 限制时间范围不超过30天
+        start_dt = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+        end_dt = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
+        if (end_dt - start_dt).days > 30:
+            return_value = {"success": False, "error": "时间范围不能超过30天，请缩短查询范围"}
+            logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
+            return return_value
+        
         try:
             if station_type.lower() not in ["reservoir", "hydrology"]:
                 return_value = {"success": False, "error": f"不支持的站点类型: {station_type}，请使用 reservoir 或 hydrology"}
@@ -78,10 +86,6 @@ def register_forecast_models(mcp: FastMCP):
             
             if isinstance(data_field, dict):
                 scheme_list = data_field.get("schList", [])
-                if not scheme_list:
-                    scheme_list = data_field.get("recommended", [])
-            elif isinstance(data_field, list):
-                scheme_list = data_field
             else:
                 scheme_list = []
             
@@ -91,6 +95,8 @@ def register_forecast_models(mcp: FastMCP):
                 return return_value
             
             def parse_datetime(dt_str):
+                if not dt_str:
+                    return None
                 for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"]:
                     try:
                         return datetime.strptime(dt_str, fmt)
@@ -101,30 +107,42 @@ def register_forecast_models(mcp: FastMCP):
             target_start = parse_datetime(start_time)
             target_end = parse_datetime(end_time)
             
-            matched_scheme = None
+            # 收集时间范围内所有方案，按接近 start_time 排序
+            candidates = []
             for scheme in scheme_list:
                 scheme_time = parse_datetime(scheme.get("schTime", ""))
-                
                 if scheme_time and target_start and target_end:
                     if target_start <= scheme_time <= target_end:
-                        matched_scheme = scheme
-                        break
+                        diff = abs(scheme_time - target_start)
+                        candidates.append((diff, scheme))
             
-            if not matched_scheme:
+            if not candidates:
                 return_value = {"success": False, "error": f"未找到与时间范围 {start_time} - {end_time} 匹配的预报方案"}
                 logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
                 return return_value
             
-            sch_id = matched_scheme.get("schId") or matched_scheme.get("id")
-            if not sch_id:
-                return_value = {"success": False, "error": "预报方案中未找到 schId"}
-                logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
-                return return_value
+            candidates.sort(key=lambda x: x[0])  # 按接近程度排序
             
-            result = water_forecast_service.get_scheme_data_by_station_name(sch_id, station_name)
-            
-            if result.get("success") is False or result.get("code") not in [200, "200", None]:
-                error_msg = result.get("message", result.get("error", "获取预报数据失败"))
+            # 按顺序尝试每个方案，直到获取到有效数据
+            result = None
+            last_error = None
+            for _, scheme in candidates:
+                sch_id = scheme.get("schId") or scheme.get("id")
+                if not sch_id:
+                    continue
+                
+                result = water_forecast_service.get_scheme_data_by_station_name(sch_id, station_name)
+                
+                if result.get("success") is False or result.get("code") not in [200, "200", None]:
+                    last_error = result.get("message", result.get("error", "获取预报数据失败"))
+                    logger.warning(f"方案 {sch_id} 获取数据失败: {last_error}，尝试下一个方案")
+                    continue
+                
+                # 获取成功，跳出循环
+                break
+            else:
+                # 所有方案均失败
+                error_msg = last_error or "所有可用预报方案均获取数据失败"
                 return_value = {"success": False, "error": error_msg}
                 logger.debug(f"run_water_forecast_model 返回结果: {return_value}")
                 return return_value
