@@ -12,10 +12,12 @@ from src.tools.data_api_tools import register_data_api_tools
 from src.tools.forecast_models import register_forecast_models
 from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
+from src.tools.skill_tools import register_skill_tools
 from src.services.communication.websocket_manager import websocket_handler
 from src.services.communication.session_middleware import SessionIDMiddleware
 from src.services.auth.mcp_auth_provider import ApiKeyVerifier, FloodControlOAuthProvider
 from src.utils.logger import get_logger
+from fastmcp.server.providers.skills import SkillsDirectoryProvider
 
 logger = get_logger(__name__)
 
@@ -62,6 +64,17 @@ def create_app() -> FastMCP:
     register_forecast_models(mcp)
     register_reservoir_dispatch(mcp)
     register_ui_tools(mcp)
+    register_skill_tools(mcp)
+
+    # 注册 Skills 提供者 — 将 skills/ 目录下的 SKILL.md 暴露为 MCP 资源
+    skills_dir = os.path.join(os.path.dirname(__file__), "..", "skills")
+    if os.path.isdir(skills_dir):
+        skills_provider = SkillsDirectoryProvider(
+            roots=[skills_dir],
+            supporting_files="template",
+        )
+        mcp.add_provider(skills_provider)
+        logger.info(f"Skills 提供者已注册: {skills_dir}")
 
     # 注册 SessionIDMiddleware — 从工具调用参数中提取 session_id
     # 并存入 ContextVar，使 CommandSender 能够将指令路由到正确的
