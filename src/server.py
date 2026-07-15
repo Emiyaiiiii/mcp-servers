@@ -14,7 +14,7 @@ from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
 from src.services.communication.websocket_manager import websocket_handler
 from src.services.communication.session_middleware import SessionIDMiddleware
-from src.services.auth.mcp_auth_provider import ApiKeyVerifier
+from src.services.auth.mcp_auth_provider import ApiKeyVerifier, FloodControlOAuthProvider
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -43,8 +43,12 @@ def create_app() -> FastMCP:
     """创建 FastMCP 应用实例"""
     auth = None
     if settings.MCP_AUTH_ENABLED:
-        auth = ApiKeyVerifier(base_url=settings.MCP_SERVER_BASE_URL)
-        logger.info("MCP认证已启用")
+        if settings.MCP_AUTH_MODE == 'oauth':
+            auth = FloodControlOAuthProvider()
+            logger.info("MCP OAuth认证已启用")
+        else:
+            auth = ApiKeyVerifier(base_url=settings.MCP_SERVER_BASE_URL)
+            logger.info("MCP API Key认证已启用")
 
     mcp = FastMCP(
         settings.MCP_SERVER_NAME,

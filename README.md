@@ -287,6 +287,168 @@ uv run python test/test_parameter_templates.py
 uv run python test/clear_and_test.py
 ```
 
+## 认证配置
+
+MCP 服务支持两种认证模式：API Key 和 OAuth 2.1，通过 `.env` 文件配置。
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `MCP_AUTH_ENABLED` | 是否启用认证 | `false` |
+| `MCP_AUTH_MODE` | 认证模式：`api_key` 或 `oauth` | `api_key` |
+| `MCP_AUTH_API_KEY` | API Key 模式的单个密钥 | 空 |
+| `MCP_AUTH_API_KEYS` | API Key 模式的多个密钥（逗号分隔） | 空 |
+| `MCP_SERVER_BASE_URL` | 服务基础 URL（OAuth 元数据中公布的端点地址） | `http://localhost:8082` |
+| `MCP_ALLOWED_ORIGINS` | 允许的跨域源（逗号分隔） | `http://localhost:8082,http://localhost:3000` |
+| `MCP_OAUTH_USERS` | OAuth 授权页面的登录用户（格式：`user:pass,user2:pass2`） | 空 |
+
+### API Key 模式
+
+简单直接，适合内部服务或开发环境。
+
+```env
+MCP_AUTH_ENABLED=true
+MCP_AUTH_MODE=api_key
+MCP_AUTH_API_KEY=your-secret-api-key
+MCP_AUTH_API_KEYS=key1,key2,key3
+```
+
+客户端调用时在请求头中携带 `Authorization: Bearer <api-key>`：
+
+```bash
+curl -H "Authorization: Bearer your-secret-api-key" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json, text/event-stream" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+     http://localhost:8082/mcp
+```
+
+### OAuth 2.1 模式
+
+适合生产环境，支持完整的授权码流程（PKCE）、令牌刷新和撤销。
+
+#### 配置步骤
+
+**1. 配置用户和客户端**
+
+```env
+MCP_AUTH_ENABLED=true
+MCP_AUTH_MODE=oauth
+MCP_OAUTH_USERS=admin:123456,user:123456
+```
+
+`MCP_OAUTH_USERS` 定义的是**授权页面的登录用户**（人的身份），用于在 `/authorize` 页面登录授权。
+
+**2. 注册 OAuth 客户端**
+
+OAuth 客户端代表**调用 MCP 接口的应用程序**（应用的身份）。需要在 `data/oauth/clients.json` 中预注册：
+
+```bash
+mkdir -p data/oauth
+python3 -c "
+import json
+clients = {
+    'my-mcp-app': {
+        'client_id': 'my-mcp-app',
+        'client_secret': 'my-secret',
+        'redirect_uris': ['http://localhost:3000/callback'],
+        'grant_types': ['authorization_code', 'refresh_token'],
+        'response_types': ['code'],
+        'token_endpoint_auth_method': 'client_secret_post',
+        'scope': 'mcp_access'
+    }
+}
+with open('data/oauth/clients.json', 'w') as f:
+    json.dump(clients, f, indent=2)
+print('客户端注册成功')
+"
+```
+
+> **注意**：`redirect_uris` 必须包含 MCP 客户端实际的回调地址，否则授权时会报错 `Redirect URI not registered for client`。例如 MCP 客户端回调地址为 `http://127.0.0.1:8088/api/mcp/oauth/callback`，则需要将其添加到 `redirect_uris` 中。
+
+**3. 启动服务**
+
+```bash
+uv run python -c "from src.server import run_server; run_server()"
+```
+
+#### 完整 OAuth 流程
+
+```
+MCP 客户端                     MCP 服务 (端口 8082)
+    │                               │
+    │  1. 获取 OAuth 元数据          │
+    │──── GET /.well-known/oauth-authorization-server ────→│
+    │←─── {authorization_endpoint, token_endpoint, ...} ──│
+    │                               │
+    │  2. 请求授权码                 │
+    │──── GET /authorize?response_type=code&client_id=... ─→│
+    │←─── 302 → redirect_uri?code=xxx ───────────────────│
+    │                               │
+    │  3. 交换令牌                   │
+    │──── POST /token (grant_type=authorization_code) ────→│
+    │←─── {access_token, refresh_token, expires_in} ─────│
+    │                               │
+    │  4. 调用 MCP 接口              │
+    │──── POST /mcp (Authorization: Bearer <access_token>) ─→│
+    │←─── {jsonrpc, result} ──────────────────────────────│
+    │                               │
+    │  5. 刷新令牌（令牌过期后）      │
+    │──── POST /token (grant_type=refresh_token) ─────────→│
+    │←─── {access_token, refresh_token} ─────────────────│
+```
+
+#### MCP 客户端配置
+
+以 `claude_desktop_config.json` 为例：
+
+```json
+{
+  "mcpServers": {
+    "FloodControlMCP": {
+      "transport": "streamable-http",
+      "url": "http://localhost:8082/mcp",
+      "auth": {
+        "type": "oauth",
+        "authorization_url": "http://localhost:8082/authorize",
+        "token_url": "http://localhost:8082/token",
+        "scope": "mcp_access",
+        "redirect_uri": "http://localhost:3000/callback"
+      }
+    }
+  }
+}
+```
+
+如果客户端在不同的网络环境（如 Docker 容器），需要将 `MCP_SERVER_BASE_URL` 改为客户端可访问的地址（如 `http://172.20.35.230:8082`）。
+
+> **注意**：OAuth 2.1 规范要求非 `localhost` 的 issuer URL 必须使用 HTTPS。如果通过 IP 地址访问，需要配置 HTTPS 反向代理。
+
+#### OAuth 端点
+
+| 端点 | 用途 |
+|------|------|
+| `/.well-known/oauth-authorization-server` | OAuth 服务器元数据（自动发现） |
+| `/.well-known/oauth-protected-resource/mcp` | 受保护资源元数据 |
+| `/authorize` | 授权码端点 |
+| `/token` | 令牌端点（颁发/刷新令牌） |
+| `/mcp` | MCP 协议端点 |
+
+#### 数据存储
+
+OAuth 数据存储在 `data/oauth/` 目录下的 JSON 文件中：
+
+| 文件 | 内容 | 生命周期 |
+|------|------|---------|
+| `clients.json` | 已注册的客户端（需手动预配） | 永久 |
+| `users.json` | 用户账号（启动时从 `MCP_OAUTH_USERS` 自动创建） | 永久 |
+| `auth_codes.json` | 临时授权码 | 5 分钟 |
+| `access_tokens.json` | 访问令牌 | 1 小时 |
+| `refresh_tokens.json` | 刷新令牌 | 7 天 |
+
+> **注意**：生产环境建议改用数据库存储，并由专业的 OAuth 身份提供商（如 Auth0、Keycloak）管理认证。
+
 ## 注意事项
 
 1. **参数模板不可修改**：`Parameter_template/` 目录下的模板文件为只读参考，用户可复制参数到 Access 数据库或通过自然语言对话修改数据库，但不能修改模板文件

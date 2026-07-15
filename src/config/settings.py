@@ -43,9 +43,13 @@ class Settings:
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
     MCP_AUTH_ENABLED = os.getenv('MCP_AUTH_ENABLED', 'false').lower() == 'true'
+    MCP_AUTH_MODE = os.getenv('MCP_AUTH_MODE', 'api_key')
     MCP_AUTH_API_KEY = os.getenv('MCP_AUTH_API_KEY', '')
+    MCP_AUTH_API_KEYS = os.getenv('MCP_AUTH_API_KEYS', '')
 
     MCP_SERVER_BASE_URL = os.getenv('MCP_SERVER_BASE_URL', 'http://localhost:8082')
     MCP_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('MCP_ALLOWED_ORIGINS', '*').split(',') if origin.strip()]
+
+    MCP_OAUTH_USERS = os.getenv('MCP_OAUTH_USERS', '')
 
 settings = Settings()
