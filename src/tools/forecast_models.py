@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import random
@@ -334,7 +335,7 @@ def register_forecast_models(mcp: FastMCP):
             end_time_result = end_time
             
             for poll_count in range(max_polls):
-                time.sleep(poll_interval)
+                await asyncio.sleep(poll_interval)
                 
                 status_result = xinanjiang_model_service.get_service_instance(inc_key)
                 if not status_result.get("success"):

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import platform
@@ -392,24 +393,34 @@ def register_reservoir_dispatch(mcp: FastMCP):
             logger.info("步骤2: 运行 RegualDispacth.exe")
             calc_start = time.time()
 
-            result = subprocess.run(
-                [exe_path],
+            proc = await asyncio.create_subprocess_exec(
+                exe_path,
                 cwd=dispatch_dir,
-                capture_output=True,
-                text=True,
-                timeout=300
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+                exit_code = proc.returncode
+                stdout_str = stdout.decode('gbk', errors='ignore') if stdout else ""
+                stderr_str = stderr.decode('gbk', errors='ignore') if stderr else ""
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                conn.close()
+                return {"success": False, "error": "RegualDispacth.exe 执行超时（300秒）", "steps": steps}
 
             calc_elapsed = round(time.time() - calc_start, 2)
             steps["calculation"] = {
                 "elapsed_seconds": calc_elapsed,
-                "exit_code": result.returncode
+                "exit_code": exit_code
             }
-            logger.info(f"计算完成: exit_code={result.returncode}, 耗时{calc_elapsed}秒")
+            logger.info(f"计算完成: exit_code={exit_code}, 耗时{calc_elapsed}秒")
 
-            if result.returncode != 0:
+            if exit_code != 0:
                 conn.close()
-                return {"success": False, "error": f"RegualDispacth.exe 返回非零退出码: {result.returncode}, stderr: {result.stderr}", "steps": steps}
+                return {"success": False, "error": f"RegualDispacth.exe 返回非零退出码: {exit_code}, stderr: {stderr_str}", "steps": steps}
 
             # ================================================================
             # 步骤3: 读取Q_Output并进行统计处理

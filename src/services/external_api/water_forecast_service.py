@@ -220,9 +220,6 @@ class WaterForecastService:
             logger.info(f"正在获取站点预报数据: {url}, 参数: {params}")
             response = self._session.get(url, params=params, headers=headers, timeout=30)
             
-            logger.info(f"站点预报数据响应状态码: {response.status_code}")
-            logger.info(f"站点预报数据响应内容: {response.text}")
-            
             response.raise_for_status()
             
             result = response.json()
