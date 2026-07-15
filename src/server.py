@@ -14,6 +14,7 @@ from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
 from src.services.communication.websocket_manager import websocket_handler
 from src.services.communication.session_middleware import SessionIDMiddleware
+from src.services.auth.mcp_auth_provider import ApiKeyVerifier
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,8 +41,14 @@ def index_handler(request):
 
 def create_app() -> FastMCP:
     """创建 FastMCP 应用实例"""
+    auth = None
+    if settings.MCP_AUTH_ENABLED:
+        auth = ApiKeyVerifier(base_url=settings.MCP_SERVER_BASE_URL)
+        logger.info("MCP认证已启用")
+
     mcp = FastMCP(
         settings.MCP_SERVER_NAME,
+        auth=auth,
     )
 
     register_warning_tools(mcp)
@@ -92,11 +99,13 @@ def run_server(transport="streamable-http"):
     # 获取 FastMCP 的 Starlette 应用（使用 streamable-http 传输方式）
     starlette_app = mcp_app.http_app(transport='streamable-http', stateless_http=True)
     
-    # 添加CORS中间件，允许MCP Inspector连接
+    allow_origins = settings.MCP_ALLOWED_ORIGINS
+    allow_credentials = settings.MCP_AUTH_ENABLED
+    
     starlette_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=allow_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -117,9 +126,9 @@ def run_server(transport="streamable-http"):
         Route("/{path:path}", serve_static_file)
     )
     
-    logger.info(f"MCP 服务已启动: http://localhost:8082")
-    logger.info(f"WebSocket 端点: ws://localhost:8082/browser")
-    logger.info(f"前端页面: http://localhost:8082/index.html")
+    logger.info(f"MCP 服务已启动: {settings.MCP_SERVER_BASE_URL}")
+    logger.info(f"WebSocket 端点: {settings.MCP_SERVER_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/browser")
+    logger.info(f"前端页面: {settings.MCP_SERVER_BASE_URL}/index.html")
     
     # 使用 uvicorn 启动应用，log_level 设置为 warning 避免框架日志干扰
     uvicorn.run(
