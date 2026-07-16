@@ -55,9 +55,9 @@ def build_reservoir_data(cursor) -> Tuple[Dict[str, Any], List[Dict], List[Dict]
         for r in rows:
             entry = {"time": str(r.tm)}
             if r.Qin is not None:
-                entry["inflow"] = round(float(r.Qin), 2)
+                entry["inflow"] = int(round(float(r.Qin)))
             if r.Qout is not None:
-                entry["outflow"] = round(float(r.Qout), 2)
+                entry["outflow"] = int(round(float(r.Qout)))
             if r.z is not None:
                 entry["water_level"] = round(float(r.z), 2)
             if r.v is not None:
@@ -70,8 +70,8 @@ def build_reservoir_data(cursor) -> Tuple[Dict[str, Any], List[Dict], List[Dict]
         z_vals = [r.z for r in rows if r.z is not None]
         v_vals = [r.v for r in rows if r.v is not None]
 
-        max_inflow = round(max(qin_vals), 2) if qin_vals else None
-        max_outflow = round(max(qout_vals), 2) if qout_vals else None
+        max_inflow = int(round(max(qin_vals))) if qin_vals else None
+        max_outflow = int(round(max(qout_vals))) if qout_vals else None
         max_water_level = round(max(z_vals), 2) if z_vals else None
         max_storage = round(max(v_vals), 2) if v_vals else None
         min_storage = round(min(v_vals), 2) if v_vals else None
@@ -157,11 +157,11 @@ def build_hydrological_data(cursor, flood_type: str = "下大洪水") -> Tuple[D
             if r.q is not None:
                 timeseries.append({
                     "time": str(r.tm),
-                    "flow": round(float(r.q), 2),
+                    "flow": int(round(float(r.q))),
                 })
 
         flows = [r.q for r in rows if r.q is not None]
-        peak_flow = round(max(flows), 2) if flows else None
+        peak_flow = int(round(max(flows))) if flows else None
 
         stat = {"station": st_name, "peak_flow": peak_flow}
 
