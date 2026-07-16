@@ -60,4 +60,15 @@ class Settings:
 
     MCP_OAUTH_USERS = os.getenv('MCP_OAUTH_USERS', '')
 
+    RAINFALL_SIMILARITY_API_URL = os.getenv('RAINFALL_SIMILARITY_API_URL', 'http://36.99.160.89:8066')
+    RAINFALL_SIMILARITY_RASTER_URL = os.getenv('RAINFALL_SIMILARITY_RASTER_URL', 'http://36.99.160.89:10017')
+
+    # SSL 验证配置
+    SSL_CERT_PATH = os.getenv('SSL_CERT_PATH', '')
+    SSL_VERIFY = os.getenv('SSL_VERIFY', 'false').lower() == 'true'
+
+    # API 限流配置
+    RATE_LIMIT_MAX_REQUESTS = int(os.getenv('RATE_LIMIT_MAX_REQUESTS', '60'))
+    RATE_LIMIT_WINDOW_SECONDS = int(os.getenv('RATE_LIMIT_WINDOW_SECONDS', '60'))
+
 settings = Settings()

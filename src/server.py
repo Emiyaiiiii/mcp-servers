@@ -4,8 +4,6 @@ from fastmcp import FastMCP
 from starlette.routing import WebSocketRoute, Route
 from starlette.responses import FileResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 from src.config.settings import settings
 from src.tools.warning_tools import register_warning_tools
 from src.tools.simulation_tools import register_simulation_tools
@@ -17,6 +15,7 @@ from src.tools.ui_tools import register_ui_tools
 from src.tools.skill_tools import register_skill_tools
 from src.services.communication.websocket_manager import websocket_handler
 from src.services.communication.session_context import set_current_session_id
+from src.services.middleware import SessionHeaderMiddleware, RateLimitMiddleware, ApiMonitorMiddleware
 from src.services.auth.mcp_auth_provider import JWTTokenVerifier, FloodControlOAuthProvider
 from src.utils.logger import get_logger
 from fastmcp.server.providers.skills import SkillsDirectoryProvider
@@ -41,20 +40,6 @@ def serve_static_file(request):
 def index_handler(request):
     """处理根路径和 index.html 请求"""
     return FileResponse(os.path.join(get_frontend_path(), "index.html"))
-
-
-class SessionHeaderMiddleware(BaseHTTPMiddleware):
-    """从 HTTP 请求头 X-Session-Id 提取 session_id 存入 ContextVar。
-
-    deerflow 侧的 SessionHeaderInterceptor 在 MCP 工具调用时自动注入
-    X-Session-Id 请求头，该中间件将其提取出来供 CommandSender 使用。
-    """
-
-    async def dispatch(self, request: Request, call_next):
-        session_id = request.headers.get("X-Session-Id")
-        if session_id:
-            set_current_session_id(session_id)
-        return await call_next(request)
 
 
 def create_app() -> FastMCP:
@@ -108,7 +93,13 @@ def run_server(transport="streamable-http"):
     # 注册 SessionHeaderMiddleware — 从 HTTP 请求头提取 X-Session-Id
     # 必须先于其他中间件注册，确保在请求处理前提取 session_id
     starlette_app.add_middleware(SessionHeaderMiddleware)
-    
+    starlette_app.add_middleware(ApiMonitorMiddleware)
+    starlette_app.add_middleware(
+        RateLimitMiddleware,
+        max_requests=settings.RATE_LIMIT_MAX_REQUESTS,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS
+    )
+
     starlette_app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,

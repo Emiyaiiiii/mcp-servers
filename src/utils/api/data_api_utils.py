@@ -54,20 +54,20 @@ def api_get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: boo
         headers = data_api_auth_service.get_auth_headers()
         
         auth_val = headers.get("Authorization", "")
-        logger.info(f"api_get 请求 [url={url}, has_auth={bool(auth_val)}, auth_prefix={auth_val[:20] if auth_val else 'N/A'}]")
+        logger.debug(f"api_get 请求 [url={url}, has_auth={bool(auth_val)}, auth_prefix={auth_val[:12] + '...' if auth_val else 'N/A'}]")
 
         response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
 
-        logger.info(f"api_get 响应 [status={response.status_code}, body_prefix={response.text[:200]}]")
+        logger.debug(f"api_get 响应 [status={response.status_code}, body_len={len(response.text)}]")
 
         if response.status_code == 401 and retry_with_auth:
             logger.warning("Token过期或无效，正在重新登录...")
             data_api_auth_service.clear_token()
             headers = data_api_auth_service.get_auth_headers()
             if headers:
-                logger.info("api_get 使用新token重试请求")
+                logger.debug("api_get 使用新token重试请求")
                 response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
-                logger.info(f"api_get 重试响应 [status={response.status_code}, body_prefix={response.text[:200]}]")
+                logger.debug(f"api_get 重试响应 [status={response.status_code}, body_len={len(response.text)}]")
 
         response.raise_for_status()
         result = response.json()
@@ -77,11 +77,11 @@ def api_get(url: str, params: Dict[str, Any] | None = None, retry_with_auth: boo
             data_api_auth_service.clear_token()
             headers = data_api_auth_service.get_auth_headers()
             if headers:
-                logger.info("api_get 使用新token重试请求(业务层)")
+                logger.debug("api_get 使用新token重试请求(业务层)")
                 response = session.get(url, params=params, headers=headers, timeout=TIMEOUT)
                 response.raise_for_status()
                 result = response.json()
-                logger.info(f"api_get 业务重试响应 [body_prefix={response.text[:200]}]")
+                logger.debug(f"api_get 业务重试响应 [body_len={len(response.text)}]")
 
         return format_date_fields(result)
 

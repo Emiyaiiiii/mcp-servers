@@ -1,7 +1,9 @@
-from fastmcp import FastMCP
-from fastmcp.server.auth import require_scopes
+import os
 import requests
 from pathlib import Path
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 from src.utils.api.data_api_utils import api_get, resolve_reservoir_for_api, resolve_station
 from src.utils.dispatch.dispatch_utils import (
@@ -9,6 +11,9 @@ from src.utils.dispatch.dispatch_utils import (
 )
 from src.utils.analysis.warning_utils import (
     get_xiaolangdi_warning_core, get_sanmenxia_warning_core, get_yellow_river_emergency_response_core
+)
+from src.utils.analysis.flood_utils import (
+    get_risk_by_huayuankou_flow_core, get_flood_submerge_core
 )
 from src.services.external_api.enhanced_search_service import enhanced_search_service
 
@@ -29,6 +34,8 @@ _generate_sanmenxia_scheme_core = generate_sanmenxia_scheme_core
 _get_xiaolangdi_warning = get_xiaolangdi_warning_core
 _get_sanmenxia_warning = get_sanmenxia_warning_core
 _get_overall_emergency_response = get_yellow_river_emergency_response_core
+_get_risk_by_huayuankou_flow_core = get_risk_by_huayuankou_flow_core
+_get_flood_submerge_core = get_flood_submerge_core
 
 
 def register_plan_tools(mcp: FastMCP):

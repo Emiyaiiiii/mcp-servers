@@ -19,7 +19,7 @@ def scan_templates() -> dict:
             ...
         }
     """
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     template_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth', 'Parameter_template')
 
     templates = {}

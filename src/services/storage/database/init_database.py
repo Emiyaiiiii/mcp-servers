@@ -97,7 +97,9 @@ def init_database(force: bool = False):
         "07_seed_evacuation_data.sql",
         "07_seed_xinanjiang_config.sql",
         "08_create_rainfall_tables.sql",
-        "10_seed_evacuation_routes.sql"
+        "10_seed_evacuation_routes.sql",
+        "11_create_encoding_mapping.sql",
+        "12_create_oauth_tables.sql"
     ]
     
     for sql_file in sql_files:

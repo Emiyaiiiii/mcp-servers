@@ -1,10 +1,45 @@
 import os
 import platform
 import subprocess
-from typing import List
+from contextlib import contextmanager
+from typing import List, Optional, Tuple
+import pyodbc
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def get_dispatch_mdb_path():
+    """获取调度 MDB 数据库文件路径"""
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    dispatch_dir = os.path.join(project_root, 'src', 'services', 'external_api', 'RegualDispacth')
+    return os.path.join(dispatch_dir, '6', 'data.mdb')
+
+
+def get_mdb_driver_name():
+    """根据系统自动选择 MDB 驱动"""
+    if platform.system() == "Windows":
+        return "Microsoft Access Driver (*.mdb, *.accdb)"
+    return "MDBTools"
+
+
+@contextmanager
+def get_mdb_connection(mdb_path: Optional[str] = None):
+    """MDB 数据库连接上下文管理器，自动处理驱动选择和连接关闭"""
+    if mdb_path is None:
+        mdb_path = get_dispatch_mdb_path()
+    driver_name = get_mdb_driver_name()
+    conn_str = f'DRIVER={{{driver_name}}};DBQ={mdb_path};'
+    conn = None
+    try:
+        conn = pyodbc.connect(conn_str)
+        yield conn.cursor(), conn
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def mdb_execute(cursor, sql: str, params: tuple = None):
@@ -48,7 +83,7 @@ def mdb_execute(cursor, sql: str, params: tuple = None):
 
 def mdb_update_field(mdb_path: str, table_name: str, column_name: str, new_value: float, key_column: str, key_value: int):
     """Update a numeric field in an MDB table using the compiled mdb_update helper."""
-    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
                                "src", "services", "external_api", "RegualDispacth", "c", "mdb_update")
     if platform.system() == "Windows":
         helper_path += ".exe"
@@ -65,7 +100,7 @@ def mdb_update_field(mdb_path: str, table_name: str, column_name: str, new_value
 
 def mdb_clear_table(mdb_path: str, table_name: str):
     """Delete all rows from an MDB table using the compiled mdb_clear_table helper."""
-    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
                                "src", "services", "external_api", "RegualDispacth", "c", "mdb_clear_table")
     if platform.system() == "Windows":
         helper_path += ".exe"
@@ -82,7 +117,7 @@ def mdb_clear_table(mdb_path: str, table_name: str):
 
 def mdb_insert_rows(mdb_path: str, table_name: str, rows: list):
     """Insert multiple rows into an MDB table using the compiled mdb_insert_row helper."""
-    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    helper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
                                "src", "services", "external_api", "RegualDispacth", "c", "mdb_insert_row")
     if platform.system() == "Windows":
         helper_path += ".exe"

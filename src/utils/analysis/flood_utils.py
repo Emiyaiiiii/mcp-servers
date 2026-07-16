@@ -144,7 +144,7 @@ def get_flood_submerge_core(huayuankou_flow: float) -> dict:
                 "备注": "局部漫滩"
             }
 
-        elif 6000 < q <= 8000:
+        elif 8000 <= q < 10000:
             result["level"] = "8000 m³/s"
             result["description"] = "大面积漫滩，河南、山东淹没范围显著扩大"
             result["henan"] = {
@@ -169,7 +169,7 @@ def get_flood_submerge_core(huayuankou_flow: float) -> dict:
                 "备注": "大面积漫滩"
             }
 
-        elif 8000 < q <= 10000:
+        elif 10000 <= q < 12370:
             result["level"] = "10000 m³/s"
             result["description"] = "山东滩区全部漫滩，河南大规模淹没"
             result["henan"] = {
@@ -194,7 +194,7 @@ def get_flood_submerge_core(huayuankou_flow: float) -> dict:
                 "备注": "全部漫滩"
             }
 
-        elif 10000 < q <= 12370:
+        elif 12370 <= q < 15700:
             result["level"] = "12370 m³/s"
             result["description"] = "河南接近全淹没，山东维持全漫滩"
             result["henan"] = {
@@ -219,32 +219,7 @@ def get_flood_submerge_core(huayuankou_flow: float) -> dict:
                 "备注": "全漫滩"
             }
 
-        elif 12370 < q <= 15700:
-            result["level"] = "15700 m³/s"
-            result["description"] = "河南全滩区淹没，山东保持全漫滩"
-            result["henan"] = {
-                "进水村庄数": 1103,
-                "进水人口": 134.30,
-                "水围村庄数": 48,
-                "水围人口": 3.99,
-                "淹没滩地(万亩)": 342.10,
-                "淹没耕地(万亩)": 234.10,
-                "经济损失(亿元)": 507.66,
-                "备注": "全滩区淹没"
-            }
-            result["shandong"] = {
-                "漫滩面积(万亩)": 234.71,
-                "淹没耕地(万亩)": 176.90,
-                "滩区进水数": 109,
-                "自然村进水数": 243,
-                "自然村围困数": 157,
-                "涉及人口": 31.68,
-                "需转移安置": 20.09,
-                "就地就近安置": 11.59,
-                "备注": "全漫滩"
-            }
-
-        elif 15700 < q < 22000:
+        elif 15700 <= q < 22000:
             result["level"] = "15700~22000 m³/s（大洪水）"
             result["description"] = "河南全滩区淹没，山东全漫滩"
             result["henan"] = {

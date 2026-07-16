@@ -176,7 +176,7 @@ def register_simulation_tools(mcp: FastMCP):
 
         Returns:
             locations: 水库位置列表，包含所有可用航拍点"""
-        logger.info(f"调用 get_available_locations，收到参数: (无)")
+        logger.info("调用 get_available_locations，收到参数: (无)")
         locations = []
         for res_id, res in RESERVOIR_DATA.items():
             locations.append({

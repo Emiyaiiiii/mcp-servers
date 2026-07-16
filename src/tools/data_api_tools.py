@@ -170,7 +170,7 @@ def register_data_api_tools(mcp: FastMCP):
                 ]
             }
         """
-        logger.info(f"调用 list_hydrological_stations，收到参数: (无)")
+        logger.info("调用 list_hydrological_stations，收到参数: (无)")
         url = f"{BASE_URL}/hydrometric/qsta/list"
         result = _get(url)
         logger.debug(f"list_hydrological_stations 返回结果: {result}")
