@@ -70,16 +70,26 @@ def register_skill_tools(mcp: FastMCP):
     async def get_skill(skill_name: str, file_path: str = "SKILL.md") -> str:
         """获取 Skill 目录下的指定文件内容。
 
-默认读取 SKILL.md（包含 AI 助手执行特定任务的完整指令），
-也可通过 file_path 参数读取 skill 目录下的其他引用文件或脚本。
+        默认读取 SKILL.md（包含 AI 助手执行特定任务的完整指令），
+        也可通过 file_path 参数读取 skill 目录下的其他引用文件或脚本。
 
-可用 Skills 及其文件:
-{skill_blocks}
+        使用步骤:
+        1. 先查看下方"可用 Skills 及其文件"列表，确定目标 skill 和所需文件路径
+        2. 调用本工具，传入 skill_name 和可选的 file_path
+        3. 如果 file_path 不存在，返回信息会列出该 skill 下的所有可用文件
 
-Args:
-    skill_name: Skill 名称
-    file_path: 文件路径（相对 skill 目录），默认 "SKILL.md"
-"""
+        示例:
+        - 获取 SKILL.md:                  get_skill(skill_name="flood-four-pre")
+        - 获取引用文档:                   get_skill(skill_name="flood-four-pre", file_path="references/2021-autumn-flood-dispatch.md")
+        - 获取子目录下的脚本或数据文件:    get_skill(skill_name="flood-four-pre", file_path="scripts/analysis.py")
+
+        可用 Skills 及其文件:
+        {skill_blocks}
+
+        Args:
+            skill_name: Skill 名称
+            file_path: 文件路径（相对 skill 目录），默认 "SKILL.md"
+        """
         # 安全检查：防止路径穿越
         clean_name = os.path.basename(os.path.normpath(skill_name))
         clean_path = os.path.normpath(file_path)

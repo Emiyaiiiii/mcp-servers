@@ -1,26 +1,16 @@
 import asyncio
 import json
 import os
-import random
-import subprocess
-import time
 import pyodbc
-import pandas as pd
 import requests
 import platform
 from datetime import datetime, timedelta
-from collections import defaultdict
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Dict, Any
 from fastmcp import FastMCP
 from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 
-from src.utils.date_utils import format_timestamp, format_date_fields
-from src.utils.reservoir_utils import (
-    judge_water_level_warning, add_water_level_description,
-    get_reservoir_thresholds, trigger_warning_alert
-)
-from src.utils.stats_utils import extract_q_statistics, extract_z_statistics
+
 from src.utils.xinanjiang_utils import (
     query_weighted_rainfall_from_db, build_rainfall_array,
     build_control_params, build_rainfall_data, build_etp_data

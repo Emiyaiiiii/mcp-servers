@@ -15,8 +15,8 @@ from fastmcp import FastMCP
 from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 from src.utils.mdb_utils import mdb_execute, mdb_update_field
-from src.utils.stats_utils import calculate_reservoir_stats, calculate_hydrologic_stats
 from src.utils.flood_utils import calculate_flood_submergence, check_dongpinghu_diversion
+from src.utils.stats_utils import build_reservoir_data, build_hydrological_data
 from src.utils.template_utils import generate_natural_language_summary, scan_templates, find_template_file, get_template_sheets
 from src.services.storage.scheme_storage import save_scheme
 from src.services.storage.database.data_access import SimulationParamsAccess, LevelCapacityCurveAccess, LevelFlowCurveAccess
@@ -476,29 +476,15 @@ def register_reservoir_dispatch(mcp: FastMCP):
             }
             logger.info(f"统计完成: {len(station_stats)}个站点, {output_rows}行数据, 耗时{stats_elapsed}秒")
 
-            # 从 Z_Output 表提取各水库统计指标（exe 运行后的计算结果）
-            reservoir_stats, reservoir_table = calculate_reservoir_stats(conn)
+            # ================================================================
+            # 从 Z_Output / Q_Output 构建时序数据 + 统计指标
+            # ================================================================
+
+            reservoirs, reservoir_stats, reservoir_table = build_reservoir_data(cursor)
             logger.info(f"已从 Z_Output 提取 {len(reservoir_stats)} 个水库的统计指标")
 
-            # 水文站统计（从 Q_Output 表计算）
-            hydrologic_stats, hydrologic_table = calculate_hydrologic_stats(conn, flood_type)
-
-            # 转换为 SchemeAccess.save 期望的字典格式
-            reservoirs = {}
-            for stat in reservoir_stats:
-                reservoirs[stat["reservoir"]] = {
-                    "max_inflow": stat["max_inflow"],
-                    "max_outflow": stat["max_outflow"],
-                    "max_water_level": stat["max_water_level"],
-                    "timeseries": []
-                }
-
-            hydrological_stations = {}
-            for stat in hydrologic_stats:
-                hydrological_stations[stat["station"]] = {
-                    "max_flow": stat["peak_flow"],
-                    "timeseries": []
-                }
+            hydrological_stations, hydrologic_stats, hydrologic_table = build_hydrological_data(cursor, flood_type)
+            logger.info(f"已从 Q_Output 提取 {len(hydrologic_stats)} 个水文站的统计指标")
 
             # 滩区淹没分析（根据花园口洪峰流量）
             garden_mouth_peak = next((s["peak_flow"] for s in hydrologic_stats if s["station"] == "花园口"), 0)
@@ -531,13 +517,19 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 "end_date": time_range_end[:10] if time_range_end else "",
                 "status": "active",
                 "constraints": [],
-                "details": [],
+                "details": {
+                    "flood_type": flood_type,
+                    "flood_submergence": flood_submergence,
+                    "dongpinghu_diversion": dongpinghu_diversion,
+                    "natural_language_summary": natural_language_summary,
+                    "time_range": {"start": time_range_start, "end": time_range_end},
+                    "total_stations": len(station_stats),
+                    "total_rows": output_rows,
+                    "steps": steps
+                },
                 "constraints_applied": {},
                 "reservoirs": reservoirs,
-                "hydrological_stations": hydrological_stations,
-                "station_stats": station_stats,
-                "output_data": output_data,
-                "steps": steps
+                "hydrological_stations": hydrological_stations
             }
 
             saved_scheme_id = save_scheme(scheme_data)
