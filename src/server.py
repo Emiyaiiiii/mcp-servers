@@ -4,6 +4,8 @@ from fastmcp import FastMCP
 from starlette.routing import WebSocketRoute, Route
 from starlette.responses import FileResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from src.config.settings import settings
 from src.tools.warning_tools import register_warning_tools
 from src.tools.simulation_tools import register_simulation_tools
@@ -14,7 +16,7 @@ from src.tools.reservoir_dispatch import register_reservoir_dispatch
 from src.tools.ui_tools import register_ui_tools
 from src.tools.skill_tools import register_skill_tools
 from src.services.communication.websocket_manager import websocket_handler
-from src.services.communication.session_middleware import SessionIDMiddleware
+from src.services.communication.session_context import set_current_session_id
 from src.services.auth.mcp_auth_provider import JWTTokenVerifier, FloodControlOAuthProvider
 from src.utils.logger import get_logger
 from fastmcp.server.providers.skills import SkillsDirectoryProvider
@@ -39,6 +41,20 @@ def serve_static_file(request):
 def index_handler(request):
     """处理根路径和 index.html 请求"""
     return FileResponse(os.path.join(get_frontend_path(), "index.html"))
+
+
+class SessionHeaderMiddleware(BaseHTTPMiddleware):
+    """从 HTTP 请求头 X-Session-Id 提取 session_id 存入 ContextVar。
+
+    deerflow 侧的 SessionHeaderInterceptor 在 MCP 工具调用时自动注入
+    X-Session-Id 请求头，该中间件将其提取出来供 CommandSender 使用。
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        session_id = request.headers.get("X-Session-Id")
+        if session_id:
+            set_current_session_id(session_id)
+        return await call_next(request)
 
 
 def create_app() -> FastMCP:
@@ -66,7 +82,7 @@ def create_app() -> FastMCP:
     register_ui_tools(mcp)
     register_skill_tools(mcp)
 
-    # 注册 Skills 提供者 — 将 skills/ 目录下的 SKILL.md 暴露为 MCP 资源（可能有些智能体不支持，还有skills-tools可以检索）
+    # 注册 Skills 提供者 — 将 skills/ 目录下的 SKILL.md 暴露为 MCP 资源
     skills_dir = os.path.join(os.path.dirname(__file__), "..", "skills")
     if os.path.isdir(skills_dir):
         skills_provider = SkillsDirectoryProvider(
@@ -75,41 +91,6 @@ def create_app() -> FastMCP:
         )
         mcp.add_provider(skills_provider)
         logger.info(f"Skills 提供者已注册: {skills_dir}")
-
-    # 注册 SessionIDMiddleware — 从工具调用参数中提取 session_id
-    # 并存入 ContextVar，使 CommandSender 能够将指令路由到正确的
-    # 前端 WebSocket 连接，而非广播给所有连接。
-    mcp.add_middleware(SessionIDMiddleware())
-
-    # 为所有已注册的工具添加 session_id 到参数 schema 中。
-    # session_id 由 deerflow 侧的 SessionInjectMiddleware 自动注入，
-    # 对工具函数透明（由 SessionIDMiddleware 提取并移除）。
-    try:
-        import asyncio
-
-        async def _enrich_tool_schemas():
-            tools = await mcp.list_tools()
-            for tool in tools:
-                if tool.parameters is not None:
-                    props = tool.parameters.setdefault("properties", {})
-                    if "session_id" not in props:
-                        props["session_id"] = {
-                            "type": "string",
-                            "description": "Browser WebSocket session_id (auto-populated)",
-                        }
-
-        # 兼容已有事件循环的场景（如测试脚本中嵌套调用）
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(_enrich_tool_schemas())
-        else:
-            asyncio.run(_enrich_tool_schemas())
-    except Exception:
-        from src.utils.logger import get_logger
-
-        get_logger(__name__).warning(
-            "Failed to enrich tool schemas with session_id", exc_info=True
-        )
 
     return mcp
 
@@ -123,6 +104,10 @@ def run_server(transport="streamable-http"):
     
     allow_origins = settings.MCP_ALLOWED_ORIGINS
     allow_credentials = settings.MCP_AUTH_ENABLED
+    
+    # 注册 SessionHeaderMiddleware — 从 HTTP 请求头提取 X-Session-Id
+    # 必须先于其他中间件注册，确保在请求处理前提取 session_id
+    starlette_app.add_middleware(SessionHeaderMiddleware)
     
     starlette_app.add_middleware(
         CORSMiddleware,
