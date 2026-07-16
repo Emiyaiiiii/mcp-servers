@@ -15,7 +15,7 @@ from src.tools.ui_tools import register_ui_tools
 from src.tools.skill_tools import register_skill_tools
 from src.services.communication.websocket_manager import websocket_handler
 from src.services.communication.session_middleware import SessionIDMiddleware
-from src.services.auth.mcp_auth_provider import ApiKeyVerifier, FloodControlOAuthProvider
+from src.services.auth.mcp_auth_provider import JWTTokenVerifier, FloodControlOAuthProvider
 from src.utils.logger import get_logger
 from fastmcp.server.providers.skills import SkillsDirectoryProvider
 
@@ -49,8 +49,8 @@ def create_app() -> FastMCP:
             auth = FloodControlOAuthProvider()
             logger.info("MCP OAuth认证已启用")
         else:
-            auth = ApiKeyVerifier(base_url=settings.MCP_SERVER_BASE_URL)
-            logger.info("MCP API Key认证已启用")
+            auth = JWTTokenVerifier(base_url=settings.MCP_SERVER_BASE_URL)
+            logger.info("MCP 令牌验证已启用")
 
     mcp = FastMCP(
         settings.MCP_SERVER_NAME,

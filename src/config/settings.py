@@ -45,7 +45,15 @@ class Settings:
     MCP_AUTH_ENABLED = os.getenv('MCP_AUTH_ENABLED', 'false').lower() == 'true'
     MCP_AUTH_MODE = os.getenv('MCP_AUTH_MODE', 'api_key')
     MCP_AUTH_API_KEY = os.getenv('MCP_AUTH_API_KEY', '')
-    MCP_AUTH_API_KEYS = os.getenv('MCP_AUTH_API_KEYS', '')
+
+    # JWT Verification Configuration
+    MCP_JWT_MODE = os.getenv('MCP_JWT_MODE', 'api_key')  # jwks, public_key, hmac, api_key
+    MCP_JWKS_URI = os.getenv('MCP_JWKS_URI', '')
+    MCP_JWT_ISSUER = os.getenv('MCP_JWT_ISSUER', '')
+    MCP_JWT_AUDIENCE = os.getenv('MCP_JWT_AUDIENCE', '')
+    MCP_JWT_ALGORITHM = os.getenv('MCP_JWT_ALGORITHM', 'RS256')
+    MCP_JWT_PUBLIC_KEY = os.getenv('MCP_JWT_PUBLIC_KEY', '')
+    MCP_JWT_SECRET = os.getenv('MCP_JWT_SECRET', '')
 
     MCP_SERVER_BASE_URL = os.getenv('MCP_SERVER_BASE_URL', 'http://localhost:8082')
     MCP_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('MCP_ALLOWED_ORIGINS', '*').split(',') if origin.strip()]
