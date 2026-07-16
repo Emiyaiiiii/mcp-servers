@@ -1,4 +1,3 @@
-from typing import Dict, Any
 from fastmcp import FastMCP
 from fastmcp.server.auth import require_scopes
 from src.services.communication.command_sender import command_sender
@@ -6,7 +5,6 @@ from src.services.storage.scheme_storage import get_scheme, get_all_schemes
 from src.utils.station_codes import (
     get_reservoir_code, get_station_code,
     search_reservoir, search_station,
-    get_all_reservoirs, get_all_stations,
     get_reservoir_station_code,
     get_reservoir_name_by_code, get_station_name_by_code
 )
@@ -438,7 +436,7 @@ def register_ui_tools(mcp: FastMCP):
 
         reservoir_schemes = {}
         try:
-            from src.utils.dispatch_utils import generate_xiaolangdi_scheme_core, generate_sanmenxia_scheme_core
+            from src.utils.dispatch.dispatch_utils import generate_xiaolangdi_scheme_core, generate_sanmenxia_scheme_core
 
             reservoirs = scheme.get("reservoirs", {})
 

@@ -1,7 +1,7 @@
 from fastmcp import FastMCP
 from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
-from src.utils.warning_utils import (
+from src.utils.analysis.warning_utils import (
     get_xiaolangdi_warning_core, get_sanmenxia_warning_core, get_yellow_river_emergency_response_core
 )
 

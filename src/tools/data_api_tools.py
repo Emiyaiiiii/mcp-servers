@@ -1,8 +1,8 @@
 from typing import Dict, Any
 from fastmcp import FastMCP
 from fastmcp.server.auth import require_scopes
-from src.utils.data_api_utils import api_get, resolve_station, resolve_reservoir_for_api, BASE_URL, TIMEOUT, _get_session
-from src.utils.reservoir_utils import add_water_level_description, trigger_warning_alert
+from src.utils.api.data_api_utils import api_get, resolve_station, resolve_reservoir_for_api, BASE_URL, TIMEOUT, _get_session
+from src.utils.analysis.reservoir_utils import add_water_level_description, trigger_warning_alert
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

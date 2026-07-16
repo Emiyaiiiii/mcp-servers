@@ -11,7 +11,7 @@ from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 
 
-from src.utils.xinanjiang_utils import (
+from src.utils.model.xinanjiang_utils import (
     query_weighted_rainfall_from_db, build_rainfall_array,
     build_control_params, build_rainfall_data, build_etp_data
 )
