@@ -99,13 +99,13 @@ class JWTTokenVerifier(TokenVerifier):
                 logger.warning(f"JWT 令牌验证异常: {e}")
                 return None
 
-        # API Key 模式 — 简单比对
+        # API Key 模式 — 简单比对，授予所有 scopes 使其可访问全部工具
         if token in self._valid_api_keys:
             logger.info("API Key 验证成功")
             return AccessToken(
                 token=token,
                 client_id="mcp_client",
-                scopes=["data"],
+                scopes=["forecast", "warning", "simulation", "plan", "data", "ui", "dispatch", "skill"],
                 expires_at=None,
                 claims={"role": "mcp_user"},
             )
