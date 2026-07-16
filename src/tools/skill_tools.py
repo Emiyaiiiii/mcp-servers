@@ -1,5 +1,6 @@
 import os
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,35 +53,6 @@ def _get_available_skills() -> list[dict]:
     return skills
 
 
-async def get_skill(skill_name: str, file_path: str = "SKILL.md") -> str:
-    """获取 Skill 目录下的指定文件内容"""
-    # 安全检查：防止路径穿越
-    clean_name = os.path.basename(os.path.normpath(skill_name))
-    clean_path = os.path.normpath(file_path)
-    if clean_path.startswith("..") or os.path.isabs(clean_path):
-        return f"无效的文件路径: {file_path}"
-
-    full_path = os.path.join(SKILLS_DIR, clean_name, clean_path)
-    # 确保文件在 skills 目录内
-    real_path = os.path.realpath(full_path)
-    if not real_path.startswith(os.path.realpath(SKILLS_DIR)):
-        return f"无效的文件路径: {file_path}"
-
-    if not os.path.isfile(real_path):
-        if clean_path == "SKILL.md":
-            available = [d for d in os.listdir(SKILLS_DIR)
-                         if os.path.isdir(os.path.join(SKILLS_DIR, d))
-                         and os.path.isfile(os.path.join(SKILLS_DIR, d, "SKILL.md"))]
-            return f"Skill '{skill_name}' 不存在。可用 Skills: {', '.join(sorted(available))}"
-        return f"文件 '{file_path}' 不存在于 skill '{skill_name}' 中。可用文件: {', '.join(_get_skill_files(clean_name))}"
-
-    try:
-        with open(real_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        return f"读取文件失败: {e}"
-
-
 def register_skill_tools(mcp: FastMCP):
     """注册 Skill 读取工具"""
     available_skills = _get_available_skills()
@@ -94,7 +66,9 @@ def register_skill_tools(mcp: FastMCP):
 
     skill_blocks = "\n".join(skill_descriptions)
 
-    get_skill.__doc__ = f"""获取 Skill 目录下的指定文件内容。
+    @mcp.tool(name="get_skill", auth=require_scopes("skill"))
+    async def get_skill(skill_name: str, file_path: str = "SKILL.md") -> str:
+        """获取 Skill 目录下的指定文件内容。
 
 默认读取 SKILL.md（包含 AI 助手执行特定任务的完整指令），
 也可通过 file_path 参数读取 skill 目录下的其他引用文件或脚本。
@@ -106,6 +80,30 @@ Args:
     skill_name: Skill 名称
     file_path: 文件路径（相对 skill 目录），默认 "SKILL.md"
 """
+        # 安全检查：防止路径穿越
+        clean_name = os.path.basename(os.path.normpath(skill_name))
+        clean_path = os.path.normpath(file_path)
+        if clean_path.startswith("..") or os.path.isabs(clean_path):
+            return f"无效的文件路径: {file_path}"
 
-    mcp.add_tool(get_skill)
+        full_path = os.path.join(SKILLS_DIR, clean_name, clean_path)
+        # 确保文件在 skills 目录内
+        real_path = os.path.realpath(full_path)
+        if not real_path.startswith(os.path.realpath(SKILLS_DIR)):
+            return f"无效的文件路径: {file_path}"
+
+        if not os.path.isfile(real_path):
+            if clean_path == "SKILL.md":
+                available = [d for d in os.listdir(SKILLS_DIR)
+                             if os.path.isdir(os.path.join(SKILLS_DIR, d))
+                             and os.path.isfile(os.path.join(SKILLS_DIR, d, "SKILL.md"))]
+                return f"Skill '{skill_name}' 不存在。可用 Skills: {', '.join(sorted(available))}"
+            return f"文件 '{file_path}' 不存在于 skill '{skill_name}' 中。可用文件: {', '.join(_get_skill_files(clean_name))}"
+
+        try:
+            with open(real_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            return f"读取文件失败: {e}"
+
     logger.info(f"Skill 工具已注册，{len(available_skills)} 个可用 Skills: {skill_names}")

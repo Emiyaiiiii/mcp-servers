@@ -1,4 +1,5 @@
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 from src.utils.warning_utils import (
     get_xiaolangdi_warning_core, get_sanmenxia_warning_core, get_yellow_river_emergency_response_core
@@ -10,7 +11,7 @@ logger = get_logger(__name__)
 def register_warning_tools(mcp: FastMCP):
 
     # ============ 小浪底预警等级判断工具 ============
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("warning"))
     async def get_xiaolangdi_warning_level(
         tongguan_flow: float = None,
         reservoir_level: float = None,
@@ -43,7 +44,7 @@ def register_warning_tools(mcp: FastMCP):
             return {"error": error_msg}
 
     # ============ 三门峡预警等级判断工具 ============
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("warning"))
     async def get_sanmenxia_warning_level(
         longmen_flow: float = None,
         tongguan_flow: float = None,
@@ -77,7 +78,7 @@ def register_warning_tools(mcp: FastMCP):
 
 
     # ============ 黄河总体应急响应判断工具 ============
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("warning"))
     async def get_yellow_river_emergency_response(
         luhun_level: float = None,
         hekoucun_level: float = None,

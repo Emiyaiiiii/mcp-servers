@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.utils.data_api_utils import api_get, resolve_station, resolve_reservoir_for_api, BASE_URL, TIMEOUT, _get_session
 from src.utils.reservoir_utils import add_water_level_description, trigger_warning_alert
 from src.utils.logger import get_logger
@@ -15,7 +16,7 @@ _trigger_warning_alert = trigger_warning_alert
 
 def register_data_api_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_rainfall_station_info(station: str) -> Dict[str, Any]:
         """
         获取雨量站基本信息。
@@ -51,7 +52,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_rainfall_station_info 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_rainfall_statistics(
         start_time: str,
         end_time: str,
@@ -99,7 +100,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_rainfall_statistics 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_river_station_info(station: str) -> Dict[str, Any]:
         """
         获取河道水文站基本信息。
@@ -140,7 +141,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_river_station_info 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_hydrological_stations() -> Dict[str, Any]:
         """
         获取水文站基本信息列表。
@@ -175,7 +176,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_hydrological_stations 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_design_flood_results(station: str) -> Dict[str, Any]:
         """
         获取设计洪水成果信息列表。
@@ -219,7 +220,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_design_flood_results 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_hydrological_features(station: str) -> Dict[str, Any]:
         """
         获取水文站水文特征统计信息。
@@ -266,7 +267,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_hydrological_features 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_water_level_sections(season_code: str, station: str) -> Dict[str, Any]:
         """
         获取监测水位断面列表。
@@ -305,7 +306,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_water_level_sections 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_realtime_hydrology(
         station: str,
         start_date: str,
@@ -346,7 +347,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_realtime_hydrology 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_daily_hydrology(
         station: str,
         start_date: str,
@@ -371,7 +372,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_daily_hydrology 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_reservoir_features(reservoir: str) -> Dict[str, Any]:
         """
         获取水库特性。
@@ -440,7 +441,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_reservoir_features 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_reservoir_level_capacity(reservoir: str) -> Dict[str, Any]:
         """
         获取水库水位库容曲线。
@@ -475,7 +476,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_reservoir_level_capacity 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def list_reservoir_features(reservoir: str) -> Dict[str, Any]:
         """
         获取水库特征值信息列表。
@@ -527,7 +528,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"list_reservoir_features 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_reservoir_realtime(
         reservoir: str,
         start_date: str,
@@ -574,7 +575,7 @@ def register_data_api_tools(mcp: FastMCP):
         return result
 
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_river_latest_realtime() -> Dict[str, Any]:
         """
         获取河道水文站最新实时水情。
@@ -600,7 +601,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_river_latest_realtime 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_reservoir_latest_realtime() -> Dict[str, Any]:
         """
         获取水库最新实时水情。
@@ -632,7 +633,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_reservoir_latest_realtime 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_hydrological_extreme(
         station: str,
         start_date: str,
@@ -676,7 +677,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_hydrological_extreme 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_hydrological_same_period(
         station: str,
         date: str
@@ -713,7 +714,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_hydrological_same_period 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_hydrological_historical_same_period(
         station: str,
         start_day: str,
@@ -753,7 +754,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_hydrological_historical_same_period 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_hydrological_yearly_extreme(
         station: str,
         start_date: str,
@@ -793,7 +794,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_hydrological_yearly_extreme 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_rainfall_warning() -> Dict[str, Any]:
         """
         获取雨量站预警信息。
@@ -823,7 +824,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_rainfall_warning 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_reservoir_warning() -> Dict[str, Any]:
         """
         获取水库预警信息。
@@ -853,7 +854,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_reservoir_warning 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_hydrological_warning() -> Dict[str, Any]:
         """
         获取水文站预警信息。
@@ -884,7 +885,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_hydrological_warning 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_reservoir_period_comparison(
         reservoir: str,
         before_date: str,
@@ -929,7 +930,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_reservoir_period_comparison 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_river_period_comparison(
         station: str,
         before_date: str,
@@ -1008,7 +1009,7 @@ def register_data_api_tools(mcp: FastMCP):
     #     logger.debug(f"get_rainflood_similarity_times 返回结果: {result}")
     #     return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def get_rainflood_similarity_content(data_id: int) -> Dict[str, Any]:
         """
         获取雨洪沙相似性分析内容信息。
@@ -1035,7 +1036,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"get_rainflood_similarity_content 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def download_image(image_id: int) -> bytes:
         """
         下载图片。
@@ -1061,7 +1062,7 @@ def register_data_api_tools(mcp: FastMCP):
             logger.error(f"download_image 错误: {str(e)}")
             return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def query_flood_plan(
         keyword: str,
         category: str = "all"
@@ -1136,7 +1137,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"query_flood_plan 返回: {list(data.keys())}")
         return {"code": 200, "msg": "success", "data": data}
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def query_evacuation(
         reservoir_name: str = None,
         village: str = None,
@@ -1187,7 +1188,7 @@ def register_data_api_tools(mcp: FastMCP):
         logger.debug(f"返回 {len(data) if data else 0} 条")
         return {"code": code, "msg": msg, "data": data}
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("data"))
     async def query_reservoir_info(
         reservoir_name: str = None,
         water_level: float = None

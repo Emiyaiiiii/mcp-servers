@@ -105,7 +105,7 @@ class JWTTokenVerifier(TokenVerifier):
             return AccessToken(
                 token=token,
                 client_id="mcp_client",
-                scopes=["mcp_access"],
+                scopes=["data"],
                 expires_at=None,
                 claims={"role": "mcp_user"},
             )
@@ -119,7 +119,7 @@ class FloodControlOAuthProvider(OAuthProvider):
         super().__init__(
             base_url=settings.MCP_SERVER_BASE_URL,
             issuer_url=settings.MCP_SERVER_BASE_URL,
-            required_scopes=["mcp_access"]
+            required_scopes=["data"]
         )
         self._init_default_users()
 
@@ -130,7 +130,7 @@ class FloodControlOAuthProvider(OAuthProvider):
                 user_str = user_str.strip()
                 if ':' in user_str:
                     username, password = user_str.split(':', 1)
-                    oauth_storage.create_user(username, password, ["mcp_access"])
+                    oauth_storage.create_user(username, password, ["data"])
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         client_data = oauth_storage.get_client(client_id)
@@ -147,7 +147,7 @@ class FloodControlOAuthProvider(OAuthProvider):
 
         code = oauth_storage.create_authorization_code(
             client_id=client.client_id,
-            scopes=params.scopes or ["mcp_access"],
+            scopes=params.scopes or ["data"],
             redirect_uri=redirect_uri,
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly

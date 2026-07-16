@@ -1,4 +1,5 @@
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 import os
 import requests
 import json
@@ -37,7 +38,7 @@ _get_overall_emergency_response = get_yellow_river_emergency_response_core
 
 def register_plan_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("plan"))
     async def load_plan_template(generation_time: str, scheme_id: str = None) -> str:
         """
         自动查询数据并生成完整的洪水调度预案。
@@ -486,7 +487,7 @@ def register_plan_tools(mcp: FastMCP):
             logger.error(f"load_plan_template 错误: {str(e)}")
             return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("plan"))
     async def query_knowledge_base(
         query: str,
         mode: str = "hybrid",
@@ -643,7 +644,7 @@ def register_plan_tools(mcp: FastMCP):
         logger.debug(f"query_knowledge_base 返回结果: 成功检索到 {len(entities)} 个实体, {len(relationships)} 个关系, {len(chunks)} 个文本片段, {len(knowledge_base_chunks)} 个知识库文档")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("plan"))
     async def generate_xiaolangdi_scheme(
         date: str,
         liu_liang: float,
@@ -669,7 +670,7 @@ def register_plan_tools(mcp: FastMCP):
         logger.debug(f"generate_xiaolangdi_scheme 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("plan"))
     async def generate_sanmenxia_scheme(
         date: str,
         liu_liang: float,
@@ -695,7 +696,7 @@ def register_plan_tools(mcp: FastMCP):
         logger.debug(f"generate_sanmenxia_scheme 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("plan"))
     async def get_risk_by_huayuankou_flow(flow: float) -> dict:
         """
         根据花园口流量判断黄河出险状况。
@@ -713,7 +714,7 @@ def register_plan_tools(mcp: FastMCP):
         logger.debug(f"get_risk_by_huayuankou_flow 返回结果: {result}")
         return result
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("plan"))
     async def get_flood_submerge(huayuankou_flow: float) -> dict:
         """
         黄河滩区淹没分析（依据文档：滩区淹没（参数【花园口流量】））。

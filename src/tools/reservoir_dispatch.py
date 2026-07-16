@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 from src.utils.mdb_utils import mdb_execute, mdb_update_field
 from src.utils.stats_utils import calculate_reservoir_stats, calculate_hydrologic_stats
@@ -45,7 +46,7 @@ _get_template_sheets = get_template_sheets
 
 def register_reservoir_dispatch(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def run_xiaolangdi_compensation_dispatch(
         qy: str = None,
         sw: str = None,
@@ -183,7 +184,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
             logger.debug(f"run_xiaolangdi_compensation_dispatch 返回结果: {return_value}")
             return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def run_xiaolangdi_water_level_control(
         qy: str = None,
         sw: str = None,
@@ -310,7 +311,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
             logger.debug(f"run_xiaolangdi_water_level_control 返回结果: {return_value}")
             return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def generate_dispatch_scheme(
         _start_time: str = None,
         flood_type: str = "下大洪水"
@@ -603,7 +604,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 except Exception:
                     pass
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def modify_dispatch_param(action: str, station_name: Optional[str] = None, param_desc: Optional[str] = None, new_value: Optional[float] = None) -> dict:
         """
         查看或修改 data.mdb 中 Dispatch_Par 表的调度参数。
@@ -755,7 +756,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 except Exception:
                     pass
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def set_flow_constraint(station_name: str, max_flow: float) -> dict:
         """
         设置指定站点的流量约束，自动调整 Dispatch_Par 表中的相关参数。
@@ -877,7 +878,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
     # 参数模板工具（Task 1-5）
     # ================================================================
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def list_parameter_templates() -> dict:
         """
         列出所有可用的参数模板。
@@ -920,7 +921,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
             logger.error(f"list_parameter_templates 出错: {e}")
             return {"success": False, "error": f"扫描模板失败: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def show_parameter_template(template_name: str) -> dict:
         """
         展示指定模板的完整参数设置。
@@ -977,7 +978,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
             logger.error(f"show_parameter_template 出错: {e}")
             return {"success": False, "error": f"展示模板参数失败: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def apply_parameter_template(
         template_name: str,
         generate_scheme: bool = True
@@ -1089,7 +1090,7 @@ def register_reservoir_dispatch(mcp: FastMCP):
                 except Exception:
                     pass
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("dispatch"))
     async def verify_dispatch_result(template_name: str) -> dict:
         """
         将实际计算结果与模板中的预期结果进行对比验证。

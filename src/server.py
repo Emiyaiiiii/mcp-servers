@@ -66,7 +66,7 @@ def create_app() -> FastMCP:
     register_ui_tools(mcp)
     register_skill_tools(mcp)
 
-    # 注册 Skills 提供者 — 将 skills/ 目录下的 SKILL.md 暴露为 MCP 资源
+    # 注册 Skills 提供者 — 将 skills/ 目录下的 SKILL.md 暴露为 MCP 资源（可能有些智能体不支持，还有skills-tools可以检索）
     skills_dir = os.path.join(os.path.dirname(__file__), "..", "skills")
     if os.path.isdir(skills_dir):
         skills_provider = SkillsDirectoryProvider(
@@ -98,7 +98,12 @@ def create_app() -> FastMCP:
                             "description": "Browser WebSocket session_id (auto-populated)",
                         }
 
-        asyncio.run(_enrich_tool_schemas())
+        # 兼容已有事件循环的场景（如测试脚本中嵌套调用）
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(_enrich_tool_schemas())
+        else:
+            asyncio.run(_enrich_tool_schemas())
     except Exception:
         from src.utils.logger import get_logger
 

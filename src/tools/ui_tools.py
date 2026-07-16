@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.services.communication.command_sender import command_sender
 from src.services.storage.scheme_storage import get_scheme, get_all_schemes
 from src.utils.station_codes import (
@@ -18,7 +19,7 @@ logger = get_logger(__name__)
 
 def register_ui_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_reservoir_overview() -> dict:
         """控制前端跳转到水库总览页面
 
@@ -36,7 +37,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_reservoir_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_reservoir_detail(
         reservoir_name: str,
         start_time: str,
@@ -97,7 +98,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_reservoir_detail 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_station_overview() -> dict:
         """控制前端跳转到水文站总览页面
 
@@ -115,7 +116,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_station_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_station_detail(
         station_name: str,
         start_time: str,
@@ -172,7 +173,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_station_detail 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_rainfall_overview() -> dict:
         """控制前端跳转到降雨信息总览页面
 
@@ -189,7 +190,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_rainfall_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_rainfall_basin(
         basin: str,
         start_time: str,
@@ -224,7 +225,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_rainfall_basin 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_similar_rainfall_page(
         start_time: str,
         end_time: str
@@ -254,7 +255,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_similar_rainfall_page 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_reservoir_forecast_page(
         reservoir_name: str,
         start_time: str,
@@ -304,7 +305,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_reservoir_forecast_page 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_control_guidance_overview() -> dict:
         """控制前端跳转到控导信息总览页面
 
@@ -322,7 +323,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_control_guidance_overview 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_control_guidance_section(
         section_name: str
     ) -> dict:
@@ -347,7 +348,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_control_guidance_section 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def navigate_to_station_forecast_page(
         station_name: str,
         start_time: str,
@@ -395,7 +396,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"navigate_to_station_forecast_page 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def send_simulation_command(
         scheme_id: str
     ) -> dict:
@@ -506,7 +507,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"send_simulation_command 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def trigger_simulation_execution(
         task_id: str
     ) -> dict:
@@ -538,7 +539,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"trigger_simulation_execution 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def send_plan_document_url(
         document_url: str,
         document_name: str
@@ -573,7 +574,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"send_plan_document_url 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def show_evacuation_routes(
         village_ids: list
     ) -> dict:
@@ -701,7 +702,7 @@ def register_ui_tools(mcp: FastMCP):
         logger.debug(f"show_evacuation_routes 返回结果: {return_value}")
         return return_value
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("ui"))
     async def clear_evacuation_routes(
         route_ids: list = None
     ) -> dict:

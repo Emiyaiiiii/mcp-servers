@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import List, Dict, Any, Optional, Tuple
 from fastmcp import FastMCP
+from fastmcp.server.auth import require_scopes
 from src.utils.logger import get_logger
 
 from src.utils.date_utils import format_timestamp, format_date_fields
@@ -42,7 +43,7 @@ _build_etp_data = build_etp_data
 
 def register_forecast_models(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("forecast"))
     async def run_water_forecast_model(station_type: str, station_name: str, start_time: str = None, end_time: str = None) -> dict:
         """
         执行设计院的分布式水文来水预报模型，根据站点类型调用不同接口获取预报数据。
@@ -186,7 +187,7 @@ def register_forecast_models(mcp: FastMCP):
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("forecast"))
     async def run_xinanjiang_model(
         station_name: str,
         start_time: str,
@@ -422,7 +423,7 @@ def register_forecast_models(mcp: FastMCP):
             logger.error(f"新安江模型完整流程异常: {e}")
             return {"success": False, "message": str(e), "code": 500}
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("forecast"))
     async def rainfall_similarity_analysis(
         step: str,
         basin: str = None,
@@ -847,7 +848,7 @@ def register_forecast_models(mcp: FastMCP):
     # 水文局动态预报数据工具（Task 2-3）
     # ================================================================
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("forecast"))
     async def get_hydrology_forecast_plans(date_time: str) -> dict:
         """
         根据时间获取水文局预报方案列表。
@@ -873,7 +874,7 @@ def register_forecast_models(mcp: FastMCP):
         logger.info(f"调用 get_hydrology_forecast_plans, date_time={date_time}")
         return hydrology_forecast_service.get_forecast_plans(date_time)
 
-    @mcp.tool()
+    @mcp.tool(auth=require_scopes("forecast"))
     async def get_hydrology_forecast_data(plcd: str, time: str) -> dict:
         """
         根据 plcd 和时间获取水文局预报方案数据，并写入 Access 数据库。
